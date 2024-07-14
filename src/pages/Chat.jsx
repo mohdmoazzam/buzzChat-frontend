@@ -150,6 +150,7 @@ const Chat = ({ chatId }) => {
   return chatDetails.isLoading ? <Skeleton /> : (
     <>
       <Stack
+      className='custom-scrollbar'
         ref={containerRef}
         boxSizing={"border-box"}
         padding={"1rem"}

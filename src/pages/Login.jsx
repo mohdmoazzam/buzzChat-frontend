@@ -1,5 +1,5 @@
 import { useFileHandler, useInputValidation } from '6pp';
-import { CameraAlt as CameraAltIcon } from "@mui/icons-material";
+import { CameraAlt as CameraAltIcon, RemoveRedEye, VisibilityOff } from "@mui/icons-material";
 import { Avatar, Button, Container, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
 import axios from 'axios';
 import React, { useState } from 'react';
@@ -12,8 +12,10 @@ import { setToken, userExists } from '../redux/reducers/auth';
 import { usernameValidator } from '../utils/validators';
 
 const Login = () => {
+
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false)
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -80,7 +82,7 @@ const Login = () => {
 
   return (
     <div style={{
-      height:  isLogin ? "100vh" : "115vh",
+      height: isLogin ? "100vh" : "115vh",
       backgroundImage: "linear-gradient(rgba(200, 200, 200, 0.5), rgba(120, 110, 220, 0.5))"
     }}>
       <Container component={"main"} maxWidth="xs" sx={{ height: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}>
@@ -89,11 +91,32 @@ const Login = () => {
             isLogin ?
               <>
                 <Typography variant='h5'> Login </Typography>
-                <form style={{ width: "100%", marginTop: "1rem" }} onSubmit={handleLogin}>
+                <form style={{ width: "100%", marginTop: "1rem", position: "relative" }} onSubmit={handleLogin}>
                   <TextField required fullWidth label="Username" margin='normal' variant='outlined' value={username.value} onChange={username.changeHandler} />
-                  <TextField required fullWidth label="Password" type='password' margin='normal' variant='outlined' value={password.value} onChange={password.changeHandler} />
+                  <TextField
+                    required
+                    fullWidth
+                    label="Password"
+                    type={showPassword ? "text" : "password"}
+                    margin='normal'
+                    variant='outlined'
+                    value={password.value}
+                    onChange={password.changeHandler}
+                  />
+                  <span
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    style={{ position: "absolute", right: 5, top: "113px", cursor: "pointer" }}
+                  >
+                    {
+                      showPassword ? (
+                        <VisibilityOff />
+                      ) : (
+                        <RemoveRedEye />
+                      )
+                    }
+                  </span>
                   <Button
-                    sx={{ marginTop: "1rem" }} 
+                    sx={{ marginTop: "1rem" }}
                     variant='contained'
                     fullWidth
                     color='primary'
@@ -109,7 +132,7 @@ const Login = () => {
               </> :
               <>
                 <Typography variant='h5'> Sign Up </Typography>
-                <form style={{ width: "100%", marginTop: "1rem" }} onSubmit={handleSignUp}>
+                <form style={{ width: "100%", marginTop: "1rem", position: "relative" }} onSubmit={handleSignUp}>
                   <Stack position={"relative"} width={"10rem"} margin={"auto"}>
                     <Avatar sx={{ width: "10rem", height: "10rem", objectFit: "contain" }} src={avatar.preview} />
                     <IconButton sx={{
@@ -147,7 +170,29 @@ const Login = () => {
                       </Typography>
                     )
                   }
-                  <TextField required fullWidth label="Password" type='password' margin='normal' variant='outlined' value={password.value} onChange={password.changeHandler} />
+                  <TextField
+                    required
+                    fullWidth
+                    label="Password"
+                    type={showPassword ? "text" : "password"}
+                    margin='normal'
+                    variant='outlined'
+                    value={password.value}
+                    onChange={password.changeHandler}
+                  />
+
+                  <span
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    style={{ position: "absolute", right: 5, top: "431px", cursor: "pointer" }}
+                  >
+                    {
+                      showPassword ? (
+                        <VisibilityOff />
+                      ) : (
+                        <RemoveRedEye />
+                      )
+                    }
+                  </span>
                   <Button
                     sx={{ marginTop: "1rem" }}
                     variant='contained'
