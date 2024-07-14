@@ -150,7 +150,7 @@ const Chat = ({ chatId }) => {
   return chatDetails.isLoading ? <Skeleton /> : (
     <>
       <Stack
-      className='custom-scrollbar'
+        className='custom-scrollbar'
         ref={containerRef}
         boxSizing={"border-box"}
         padding={"1rem"}
@@ -195,19 +195,26 @@ const Chat = ({ chatId }) => {
             placeholder='Message'
             value={message}
             onChange={messageChangeHandler}
-            sx={{ height: "3rem", fontSize: "15px" }}
+            sx={{
+              height: "3rem",
+              fontSize: "16px",
+              backgroundColor: "#f0f0f0",
+              borderRadius: "0.5rem"
+            }}
           />
 
-          <IconButton type="submit" sx={{
-            rotate: "-50deg",
-            backgroundColor: orange,
-            color: "white",
-            marginLeft: "0.5rem",
-            padding: "0.5rem",
-            "&:hover": {
-              bgcolor: "error.dark"
-            }
-          }}>
+          <IconButton
+            type="submit"
+            sx={{
+              rotate: "-1deg",
+              backgroundColor: orange,
+              color: "white",
+              marginLeft: "0.3rem",
+              padding: "0.5rem",
+              "&:hover": {
+                bgcolor: "error.dark"
+              }
+            }}>
             <SendIcon />
           </IconButton>
         </Stack>
