@@ -156,10 +156,11 @@ const Chat = ({ chatId }) => {
         padding={"1rem"}
         spacing={"1rem"}
         bgcolor={grayColor}
-        height={"100%"}
+        height={"107%"}
         sx={{
           overflowX: "hidden",
-          overflowY: "auto"
+          overflowY: "auto",
+          borderBottomLeftRadius: "1rem"
         }}
       >
         {
@@ -173,7 +174,7 @@ const Chat = ({ chatId }) => {
         <div ref={bottomRef} />
       </Stack>
 
-      <form style={{ height: "12%" }} onSubmit={submitHandler}>
+      <form style={{ height: "13%" }} onSubmit={submitHandler}>
         <Stack
           direction={"row"}
           height={"100%"}
@@ -199,7 +200,7 @@ const Chat = ({ chatId }) => {
               height: "3rem",
               fontSize: "16px",
               backgroundColor: "#f0f0f0",
-              borderRadius: "0.5rem"
+              borderRadius: "1rem"
             }}
           />
 
