@@ -105,7 +105,7 @@ const Chat = ({ chatId }) => {
 
   const newMessagesListener = useCallback((data) => {
     if (data.chatId !== chatId) return;
-    setMessages(prev => [...prev, data.message])
+    setMessages(prev => [...prev, data.message]);
   }, [chatId]);
 
   const startTypingListener = useCallback((data) => {
@@ -174,11 +174,11 @@ const Chat = ({ chatId }) => {
         <div ref={bottomRef} />
       </Stack>
 
-      <form style={{ height: "13%" }} onSubmit={submitHandler}>
+      <form style={{ height: "15%" }} onSubmit={submitHandler}>
         <Stack
           direction={"row"}
           height={"100%"}
-          padding={"0.5rem"}
+          padding={"1rem"}
           alignItems={"center"}
           position={"relative"}
         >

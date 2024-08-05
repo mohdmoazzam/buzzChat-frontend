@@ -8,13 +8,14 @@ import { useSendAttachmentsMutation } from '../../redux/api/api';
 
 const FileMenu = ({ anchorE1, chatId }) => {
   const dispatch = useDispatch();
+  const { isFileMenu } = useSelector((state) => state.misc);
 
   const imageRef = useRef(null);
   const audioRef = useRef(null);
   const videoRef = useRef(null);
   const fileRef = useRef(null);
+
   const [sendAttachments] = useSendAttachmentsMutation();
-  const { isFileMenu } = useSelector((state) => state.misc);
 
   const closeFileMenu = () => {
     dispatch(setIsFileMenu(false));

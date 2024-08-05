@@ -3,7 +3,6 @@ import React from 'react';
 import ChatItem from "../shared/ChatItem";
 
 const ChatList = ({ w = "100%", chats = [], chatId, onlineUsers = [], newMessagesAlert = [], handleDeleteChat }) => {
-  console.log("onlineUsers", onlineUsers);
   return (
 
     <Stack width={w} direction={"column"} overflow={"auto"} height={"100%"}>
@@ -12,11 +11,10 @@ const ChatList = ({ w = "100%", chats = [], chatId, onlineUsers = [], newMessage
         chats?.map((chat, index) => {
 
           const { _id, name, groupChat, avatar, members } = chat;
-          console.log("members", members);
+  
           const newMessageAlert = newMessagesAlert?.find(({ chatId }) => chatId === _id);
 
           const isOnline = members?.some((member) => onlineUsers?.includes(member));
-          console.log("Is", isOnline);
 
           return <ChatItem
             key={index}
