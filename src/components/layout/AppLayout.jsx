@@ -141,11 +141,11 @@ const AppLayout = () => (WrappedComponent) => {
             item
             md={4}
             lg={3}
-            height={"auto"}
             sx={{
               display: { xs: "none", md: "block" },
               padding: "2rem",
               bgcolor: "rgba(0,0,0,0.85)",
+              overflowY: "auto",
             }}
           >
             <Profile user={user} />
