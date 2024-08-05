@@ -141,7 +141,7 @@ const AppLayout = () => (WrappedComponent) => {
             item
             md={4}
             lg={3}
-            height={"auto"}
+            height={"112vh"}
             sx={{
               display: { xs: "none", md: "block" },
               padding: "2rem",
