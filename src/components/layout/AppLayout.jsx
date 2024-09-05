@@ -98,6 +98,7 @@ const AppLayout = () => (WrappedComponent) => {
         <Title />
         <Header />
 
+        {/* Mobile Drawer for chat list */}
         {isLoading ? (
           <Skeleton />
         ) : (
@@ -112,13 +113,15 @@ const AppLayout = () => (WrappedComponent) => {
             />
           </Drawer>
         )}
-        <Grid container height={"calc(100vh - 4rem)"}>
+
+        {/* Main Grid Layout */}
+        <Grid container sx={{ minHeight: "calc(100vh - 4rem)" }}>
+          {/* Chat List - Sidebar for Small and Larger Screens */}
           <Grid
             item
             sm={4}
             md={3}
-            sx={{ display: { xs: "none", sm: "block" } }}
-            height={"100%"}
+            sx={{ display: { xs: "none", sm: "block" }, height: "100%" }}
           >
             {isLoading ? (
               <Skeleton />
@@ -133,10 +136,20 @@ const AppLayout = () => (WrappedComponent) => {
             )}
           </Grid>
 
-          <Grid item xs={12} sm={8} lg={6} height={"100%"}>
+          <Grid
+            item
+            xs={12}
+            sm={8}
+            lg={6}
+            sx={{
+              height: "100%",
+              overflowY: "auto",
+            }}
+          >
             <WrappedComponent {...props} chatId={chatId} />
           </Grid>
 
+          {/* Profile Section */}
           <Grid
             item
             md={4}
@@ -144,7 +157,8 @@ const AppLayout = () => (WrappedComponent) => {
             sx={{
               display: { xs: "none", md: "block" },
               padding: "2rem",
-              bgcolor: "rgba(0,0,0,0.85)",
+              bgcolor: "rgba(0, 0, 0, 0.85)",
+              height: "100%",
               overflowY: "auto",
             }}
           >

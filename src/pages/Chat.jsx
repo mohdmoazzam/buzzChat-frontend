@@ -177,11 +177,11 @@ const Chat = ({ chatId }) => {
         padding={"1rem"}
         spacing={"1rem"}
         bgcolor={grayColor}
-        height={"107%"}
+        height={"calc(100vh - 80px)"}
         sx={{
           overflowX: "hidden",
           overflowY: "auto",
-          borderBottomLeftRadius: "1rem",
+          backgroundColor: grayColor,
         }}
       >
         {allMessages?.map((message) => (
@@ -191,45 +191,58 @@ const Chat = ({ chatId }) => {
         <div ref={bottomRef} />
       </Stack>
 
-      <form style={{ height: "15%" }} onSubmit={submitHandler}>
+      <form style={{ height: "80px", width: "100%" }} onSubmit={submitHandler}>
         <Stack
           direction={"row"}
-          height={"100%"}
-          padding={"1rem"}
+          padding={"0.8rem 1rem"}
           alignItems={"center"}
-          position={"relative"}
+          justifyContent={"space-between"}
+          sx={{
+            backgroundColor: "#f8f8f8",
+            marginTop: "10px",
+          }}
         >
+          {/* Attach Icon */}
           <IconButton
             sx={{
-              position: "absolute",
-              left: "1rem",
               rotate: "2deg",
+              padding: "0.5rem",
+              backgroundColor: "#ececec",
+              borderRadius: "50%",
+              "&:hover": {
+                backgroundColor: "#d4d4d4",
+              },
             }}
             onClick={handleFileOpen}
           >
             <AttachFileIcon />
           </IconButton>
 
+          {/* InputBox */}
           <InputBox
-            placeholder="Message"
+            placeholder="Type your message..."
             value={message}
             onChange={messageChangeHandler}
             sx={{
-              height: "3rem",
               fontSize: "16px",
-              backgroundColor: "#f0f0f0",
-              borderRadius: "1rem",
+              backgroundColor: "#ffffff",
+              borderRadius: "2rem",
+              flexGrow: 1,
+              padding: "0.8rem 1.5rem",
+              marginLeft: "1rem",
+              marginRight: "1rem",
+              border: "1px solid #ddd",
             }}
           />
 
+          {/* Send Button */}
           <IconButton
             type="submit"
             sx={{
-              rotate: "-1deg",
               backgroundColor: orange,
               color: "white",
-              marginLeft: "0.3rem",
-              padding: "0.5rem",
+              padding: "0.8rem",
+              borderRadius: "50%",
               "&:hover": {
                 bgcolor: "error.dark",
               },
