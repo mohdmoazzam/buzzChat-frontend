@@ -199,7 +199,6 @@ const Chat = ({ chatId }) => {
           justifyContent={"space-between"}
           sx={{
             backgroundColor: "#f8f8f8",
-            marginTop: "10px",
           }}
         >
           {/* Attach Icon */}
