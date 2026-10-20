@@ -24,7 +24,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { Suspense, lazy, useState } from "react";
+import React, { Suspense, forwardRef, lazy, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
@@ -40,7 +40,7 @@ import {
   setIsSearch,
 } from "../../redux/reducers/misc";
 const SearchDialog = lazy(() => import("../specific/Search"));
-const NotificationDialog = lazy(() => import("../specific/Notification"));
+const NotificationDropdown = lazy(() => import("../specific/Notification"));
 const NewGroupDialog = lazy(() => import("../specific/NewGroup"));
 
 const Header = () => {
@@ -52,21 +52,20 @@ const Header = () => {
   const { notificationCount } = useSelector((state) => state.chat);
   const { user } = useSelector((state) => state.auth);
   const [accountAnchor, setAccountAnchor] = useState(null);
+  const bellRef = useRef(null);
 
   const handleMobile = () => {
     dispatch(setIsMobileMenu(true));
   };
 
   const openSearchDialog = () => {
+    setAccountAnchor(null);
     dispatch(setIsSearch(true));
   };
 
   const openNewGroup = () => {
+    setAccountAnchor(null);
     dispatch(setIsNewGroup(true));
-  };
-
-  const navigateToGroup = () => {
-    navigate("/groups");
   };
 
   const goTo = (path) => {
@@ -105,6 +104,8 @@ const Header = () => {
           flexShrink: 0,
         }}
       >
+        {/* Content lines up with the centered app width on wide screens */}
+        <Box sx={{ width: "100%", maxWidth: 1440, mx: "auto", height: "100%", display: "flex", alignItems: "center", "@media (min-width: 1441px)": { px: 2 } }}>
         <IconButton
           onClick={handleMobile}
           aria-label="Open chats"
@@ -143,10 +144,8 @@ const Header = () => {
         <Box sx={{ flexGrow: 1 }} />
 
         <Stack direction="row" alignItems="center" spacing={{ xs: 0, sm: 0.5 }}>
-          <IconBtn title="Find people" icon={<SearchIcon />} onClick={openSearchDialog} />
-          <IconBtn title="New group" icon={<AddIcon />} onClick={openNewGroup} />
-          <IconBtn title="Manage groups" icon={<GroupIcon />} onClick={navigateToGroup} />
           <IconBtn
+            ref={bellRef}
             title="Notifications"
             icon={<NotificationsIcon />}
             onClick={openNotifications}
@@ -159,12 +158,14 @@ const Header = () => {
             </IconButton>
           </Tooltip>
         </Stack>
+        </Box>
       </Box>
 
       <Menu
         anchorEl={accountAnchor}
         open={Boolean(accountAnchor)}
         onClose={() => setAccountAnchor(null)}
+        disableScrollLock
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{ paper: { sx: { mt: 1, minWidth: 220, borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" } } }}
@@ -187,6 +188,25 @@ const Header = () => {
           Edit profile
         </MenuItem>
         <Divider />
+        <MenuItem onClick={openSearchDialog}>
+          <ListItemIcon>
+            <SearchIcon fontSize="small" />
+          </ListItemIcon>
+          Find people
+        </MenuItem>
+        <MenuItem onClick={openNewGroup}>
+          <ListItemIcon>
+            <AddIcon fontSize="small" />
+          </ListItemIcon>
+          New group
+        </MenuItem>
+        <MenuItem onClick={() => goTo("/groups")}>
+          <ListItemIcon>
+            <GroupIcon fontSize="small" />
+          </ListItemIcon>
+          Manage groups
+        </MenuItem>
+        <Divider />
         <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
           <ListItemIcon sx={{ color: "inherit" }}>
             <LogoutIcon fontSize="small" />
@@ -202,8 +222,8 @@ const Header = () => {
       )}
 
       {isNotification && (
-        <Suspense fallback={<Backdrop open />}>
-          <NotificationDialog />
+        <Suspense fallback={null}>
+          <NotificationDropdown anchorEl={bellRef.current} />
         </Suspense>
       )}
 
@@ -216,10 +236,10 @@ const Header = () => {
   );
 };
 
-const IconBtn = ({ title, icon, onClick, value }) => {
+const IconBtn = forwardRef(({ title, icon, onClick, value }, ref) => {
   return (
     <Tooltip title={title}>
-      <IconButton onClick={onClick} aria-label={title} sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}>
+      <IconButton ref={ref} onClick={onClick} aria-label={title} sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}>
         {value ? (
           <Badge badgeContent={value} color="primary">
             {icon}
@@ -230,6 +250,6 @@ const IconBtn = ({ title, icon, onClick, value }) => {
       </IconButton>
     </Tooltip>
   );
-};
+});
 
 export default Header;

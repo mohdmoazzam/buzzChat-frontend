@@ -194,7 +194,27 @@ const Login = () => {
   );
 
   return (
-    <Box sx={{ minHeight: "100vh", display: "flex", bgcolor: { xs: "#fff", md: "#f6f6f8" } }}>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: { xs: "#fff", md: "#f6f6f8" },
+      }}
+    >
+      {/* On large screens both panels form one full-height centered column with side space */}
+      <Box
+        sx={{
+          display: "flex",
+          width: "100%",
+          maxWidth: { lg: 1200 },
+          minHeight: "100vh",
+          overflow: "hidden",
+          bgcolor: { lg: "#fff" },
+          boxShadow: { lg: "0 0 48px rgba(30,20,60,0.08)" },
+        }}
+      >
 
       {/* Brand panel (desktop only) */}
       <Box
@@ -239,8 +259,8 @@ const Login = () => {
             width: "100%",
             maxWidth: 420,
             bgcolor: "#fff",
-            borderRadius: { xs: 0, md: "20px" },
-            boxShadow: { xs: "none", md: "0 10px 40px rgba(0,0,0,0.06)" },
+            borderRadius: { xs: 0, md: "20px", lg: 0 },
+            boxShadow: { xs: "none", md: "0 10px 40px rgba(0,0,0,0.06)", lg: "none" },
             p: { xs: 1, sm: 4 },
           }}
         >
@@ -369,6 +389,7 @@ const Login = () => {
             </motion.div>
           </AnimatePresence>
         </Box>
+      </Box>
       </Box>
     </Box>
   );

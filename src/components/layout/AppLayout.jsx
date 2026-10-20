@@ -20,6 +20,9 @@ import Title from "../shared/Title";
 import ChatList from "../specific/ChatList";
 import Header from "./Header";
 
+// The whole app is centered with side gutters above this width
+export const APP_MAX_WIDTH = 1440;
+
 const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
   return (props) => {
     const socket = getSocket();
@@ -66,10 +69,13 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       dispatch(incrementNotification());
     }, [dispatch]);
 
-    const refetchListener = useCallback(() => {
-      refetch();
-      navigate("/");
-    }, [refetch, navigate]);
+    // Only leave the open chat if it no longer exists (deleted, or you were removed)
+    const refetchListener = useCallback(async () => {
+      const { data: fresh } = await refetch();
+      if (chatId && fresh && !fresh.chats?.some((chat) => chat._id === chatId)) {
+        navigate("/");
+      }
+    }, [refetch, navigate, chatId]);
 
     const onlineUsersListener = useCallback((data) => {
       setOnlineUsers(data);
@@ -101,10 +107,25 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
     return (
       <>
         <Title />
-        <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+        {/* Full-height app; on wide screens the app is a centered column
+            on one continuous white page, edged by thin dividers */}
+        <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "#fff" }}>
           <Header />
 
-          <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
+          <Box sx={{ flex: 1, minHeight: 0, bgcolor: "#fff" }}>
+          <Box
+            sx={{
+              height: "100%",
+              maxWidth: APP_MAX_WIDTH,
+              mx: "auto",
+              display: "flex",
+              [`@media (min-width: ${APP_MAX_WIDTH + 1}px)`]: {
+                borderLeft: "1px solid",
+                borderRight: "1px solid",
+                borderColor: "divider",
+              },
+            }}
+          >
             {/* Chat list sidebar (tablet and up) */}
             <Box
               sx={{
@@ -138,6 +159,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
             </Box>
 
           </Box>
+        </Box>
         </Box>
 
         {/* Mobile drawer for chat list */}

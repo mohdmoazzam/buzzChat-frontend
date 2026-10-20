@@ -1,4 +1,5 @@
 import { configureStore } from "@reduxjs/toolkit";
+import { setupListeners } from "@reduxjs/toolkit/query";
 import authReducer from "./reducers/auth";
 import miscReducer from "./reducers/misc";
 import chatReducer from "./reducers/chat";
@@ -13,5 +14,8 @@ const store = configureStore({
     },
     middleware: (defaultMiddleware) => [...defaultMiddleware(), api.middleware],
 });
+
+// Enables refetchOnFocus / refetchOnReconnect for the API
+setupListeners(store.dispatch);
 
 export default store;

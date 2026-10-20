@@ -105,21 +105,49 @@ const LayoutLoader = () => {
     )
 }
 
+// Soft wave: each dot brightens and grows slightly in turn
+const typingWave = keyframes`
+  0%, 60%, 100% { opacity: 0.35; transform: scale(0.85); }
+  30% { opacity: 1; transform: scale(1); }
+`;
+
+const bubbleIn = keyframes`
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+`;
+
 const TypingLoader = () => (
     <Box
         role="status"
         aria-label="Typing"
         sx={{
             alignSelf: "flex-start",
-            bgcolor: "#fff",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            bgcolor: "#e9e9ee",
             borderRadius: "18px",
             borderBottomLeftRadius: "6px",
-            px: 2,
-            py: 1.5,
-            boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+            px: 1.75,
+            height: 36,
+            transformOrigin: "bottom left",
+            animation: `${bubbleIn} 0.2s ease-out`,
         }}
     >
-        <Dots color="#a1a1aa" size={7} />
+        {[0, 1, 2].map((i) => (
+            <Box
+                key={i}
+                sx={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    bgcolor: "#8e8e99",
+                    animation: `${typingWave} 1.2s ease-in-out infinite`,
+                    animationDelay: `${i * 0.18}s`,
+                    "@media (prefers-reduced-motion: reduce)": { animation: "none", opacity: 0.6 },
+                }}
+            />
+        ))}
     </Box>
 );
 

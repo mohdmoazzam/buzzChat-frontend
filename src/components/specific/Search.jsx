@@ -11,6 +11,7 @@ import {
   Button,
   CircularProgress,
   Dialog,
+  Divider,
   IconButton,
   InputBase,
   Skeleton,
@@ -87,7 +88,7 @@ const Search = () => {
       fullScreen={fullScreen}
       fullWidth
       maxWidth="xs"
-      PaperProps={{ sx: { borderRadius: fullScreen ? 0 : "20px", height: fullScreen ? "100%" : "min(600px, 85vh)" } }}
+      PaperProps={{ sx: { borderRadius: fullScreen ? 0 : "20px", height: fullScreen ? "100%" : "min(680px, 90vh)", maxWidth: fullScreen ? "100%" : 520 } }}
     >
       {/* Header */}
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2.5, pt: 2.5, pb: 1.5 }}>
@@ -129,8 +130,10 @@ const Search = () => {
         />
       </Box>
 
+      <Divider />
+
       {/* Results */}
-      <Box className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", px: 1.5, pb: 2 }}>
+      <Box className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", px: 1.5, pt: 1.5, pb: 2 }}>
         {!isSearching && users.length > 0 && (
           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ px: 1, display: "block", mb: 0.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
             {query.trim() ? `${users.length} result${users.length > 1 ? "s" : ""}` : "People you may know"}
@@ -163,7 +166,7 @@ const Search = () => {
             </Typography>
           </Stack>
         ) : (
-          <Stack spacing={0.25}>
+          <Stack divider={<Divider sx={{ ml: "68px", mr: 1 }} />}>
             {users.map((user) => (
               <PersonRow
                 key={user._id}

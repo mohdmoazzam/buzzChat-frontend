@@ -13,13 +13,17 @@ const api = createApi({
             }
         }
     }),
-    tagTypes: ["Chat"],
+    tagTypes: ["Chat", "Notifications"],
+    // Refresh data when the tab regains focus or the network comes back
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
     endpoints: (builder) => ({
         myChats: builder.query({
             query: () => ({
                 url: "chat/my", credentials: "include"
             }),
             keepUnusedDataFor: 0,
+            providesTags: ["Chat"],
         }),
 
         searchUser: builder.query({
@@ -46,6 +50,8 @@ const api = createApi({
                 body: data
             }),
             keepUnusedDataFor: 0,
+            // Show the new friend right away, even if the socket event is missed
+            invalidatesTags: ["Chat", "Notifications"],
         }),
 
         getNotifications: builder.query({
@@ -53,6 +59,7 @@ const api = createApi({
                 url: `user/myNotifications`, credentials: "include"
             }),
             keepUnusedDataFor: 0,
+            providesTags: ["Notifications"],
         }),
 
         getChatDetails: builder.query({
@@ -90,6 +97,7 @@ const api = createApi({
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
+            providesTags: ["Chat"],
         }),
 
         availableFriends: builder.query({
@@ -104,21 +112,24 @@ const api = createApi({
         }),
 
         newGroup: builder.mutation({
-            query: ({ name, members }) => ({
+            // FormData: name, description, members (repeated), avatar
+            query: (formData) => ({
                 url: "chat/new",
                 method: "POST",
                 credentials: "include",
-                body: { name, members }
-            }), 
+                body: formData
+            }),
             keepUnusedDataFor: 0,
+            invalidatesTags: ["Chat"],
         }),
 
         renameGroup: builder.mutation({
-            query: ({ chatId, name }) => ({
+            // Pass either { chatId, name } or { chatId, formData } (name, description, avatar)
+            query: ({ chatId, name, formData }) => ({
                 url: `chat/${chatId}`,
                 method: "PUT",
                 credentials: "include",
-                body: { name }
+                body: formData ?? { name }
             }),
             invalidatesTags: ["Chat"]
         }),

@@ -1,140 +1,160 @@
-import { ListItemText, Menu, MenuItem, MenuList, Tooltip } from '@mui/material'
-import React, { useRef } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { setIsFileMenu, setUploadingLoader } from '../../redux/reducers/misc';
-import { AudioFile, Image as ImageIcon, UploadFile, VideoFile } from '@mui/icons-material';
+import {
+  AudiotrackRounded as AudioIcon,
+  DescriptionRounded as FileIcon,
+  ImageRounded as ImageIcon,
+  VideocamRounded as VideoIcon,
+} from '@mui/icons-material';
+import { Box, Popover, Stack, Typography } from '@mui/material';
+import React, { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { useDispatch, useSelector } from 'react-redux';
 import { useSendAttachmentsMutation } from '../../redux/api/api';
+import { setIsFileMenu, setUploadingLoader } from '../../redux/reducers/misc';
+
+const MAX_FILES = 5;
+const MAX_FILE_MB = 5;
+
+const OPTIONS = [
+  { key: "photo", label: "Photos", noun: ["photo", "photos"], accept: "image/png, image/jpeg, image/gif, image/webp", Icon: ImageIcon, color: "#7c5cff" },
+  { key: "video", label: "Videos", noun: ["video", "videos"], accept: "video/mp4, video/webm, video/ogg", Icon: VideoIcon, color: "#ef5b6b" },
+  { key: "audio", label: "Audio", noun: ["audio file", "audio files"], accept: "audio/mpeg, audio/wav, audio/ogg", Icon: AudioIcon, color: "#f59e0b" },
+  { key: "file", label: "Document", noun: ["file", "files"], accept: "*", Icon: FileIcon, color: "#3b82f6" },
+];
 
 const FileMenu = ({ anchorE1, chatId }) => {
   const dispatch = useDispatch();
   const { isFileMenu } = useSelector((state) => state.misc);
-
-  const imageRef = useRef(null);
-  const audioRef = useRef(null);
-  const videoRef = useRef(null);
-  const fileRef = useRef(null);
+  const inputRefs = useRef({});
 
   const [sendAttachments] = useSendAttachmentsMutation();
 
-  const closeFileMenu = () => {
-    dispatch(setIsFileMenu(false));
-  };
+  const closeFileMenu = () => dispatch(setIsFileMenu(false));
 
-  const selectImage = () => imageRef.current?.click();
-  const selectAudio = () => audioRef.current?.click();
-  const selectVideo = () => videoRef.current?.click();
-  const selectFile = () => fileRef.current?.click();
+  // Focus stays in the message box, so handle Esc here
+  useEffect(() => {
+    if (!isFileMenu) return;
+    const onKey = (e) => { if (e.key === "Escape") closeFileMenu(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isFileMenu]);
 
-  const fileChangeHandler = async (e, key) => {
-    const files = Array.from(e.target.files);
+  const fileChangeHandler = async (e, option) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
     if (files.length === 0) return;
 
-    if (files.length > 5) return toast.error("You can only send 5");
-
-    dispatch(setUploadingLoader(true));
-
-    const toastId = toast.loading("Sending..");
+    if (files.length > MAX_FILES) {
+      return toast.error(`You can send up to ${MAX_FILES} files at a time`);
+    }
+    const tooBig = files.filter((f) => f.size > MAX_FILE_MB * 1024 * 1024);
+    if (tooBig.length) {
+      return toast.error(`${tooBig.length === 1 ? `"${tooBig[0].name}" is` : `${tooBig.length} files are`} over ${MAX_FILE_MB} MB`);
+    }
 
     closeFileMenu();
+    // The attach button shows the progress spinner; the message itself confirms success
+    dispatch(setUploadingLoader(true));
+    const noun = option.noun[files.length === 1 ? 0 : 1];
+
     try {
       const formData = new FormData();
       formData.append("chatId", chatId);
       files.forEach((file) => formData.append("files", file));
       const response = await sendAttachments(formData);
-      if (response.data) {
-        toast.success(`${key} sent successfully`, { id: toastId });
-      } else {
-        toast.error(`Failed to send ${key}`, { id: toastId });
+      if (!response.data) {
+        toast.error(response.error?.data?.message || `Couldn't send ${noun}`);
       }
-    } catch (err) {
-      toast.error(err, { id: toastId });
-    }
-    finally {
+    } catch {
+      toast.error(`Couldn't send ${noun}`);
+    } finally {
       dispatch(setUploadingLoader(false));
     }
   };
 
-
   return (
-    <Menu anchorEl={anchorE1} open={isFileMenu} onClose={closeFileMenu}>
-      <div style={{ width: "10rem" }}>
-        <MenuList>
-          <MenuItem onClick={selectImage}>
-            <Tooltip title="Image">
-              <ImageIcon />
-            </Tooltip>
-
-            <ListItemText style={{ marginLeft: "0.5rem" }}>Image</ListItemText>
-            <input
-              type="file"
-              multiple
-              accept="image/png, image/jpeg, image/gif"
-              style={{
-                display: "none"
+    <Popover
+      open={isFileMenu}
+      anchorEl={anchorE1}
+      onClose={closeFileMenu}
+      // Avoid layout jumps: no body scroll lock, and don't pull focus from the message box
+      disableScrollLock
+      disableAutoFocus
+      disableRestoreFocus
+      anchorOrigin={{ vertical: "top", horizontal: "left" }}
+      transformOrigin={{ vertical: "bottom", horizontal: "left" }}
+      slotProps={{
+        paper: {
+          sx: {
+            mt: -1.5,
+            p: 1.5,
+            borderRadius: "18px",
+            boxShadow: "0 12px 32px rgba(0,0,0,0.12)",
+            border: "1px solid",
+            borderColor: "divider",
+          },
+        },
+      }}
+    >
+      <Stack direction="row" spacing={0.5}>
+        {OPTIONS.map((option) => {
+          const { key, label, accept, Icon, color } = option;
+          return (
+            <Box
+              key={key}
+              component="button"
+              type="button"
+              onClick={() => inputRefs.current[key]?.click()}
+              sx={{
+                all: "unset",
+                cursor: "pointer",
+                width: 76,
+                py: 1,
+                borderRadius: "14px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 0.75,
+                transition: "background-color 0.15s",
+                "&:hover": { bgcolor: "#f6f6f8" },
+                "&:hover .tile": { transform: "translateY(-2px)" },
+                "&:focus-visible": { outline: `2px solid ${color}`, outlineOffset: -2 },
               }}
-              onChange={(e) => fileChangeHandler(e, "Images")}
-              ref={imageRef}
-            />
-          </MenuItem>
+            >
+              <Box
+                className="tile"
+                sx={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  bgcolor: color,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: `0 6px 14px ${color}40`,
+                  transition: "transform 0.15s",
+                }}
+              >
+                <Icon />
+              </Box>
+              <Typography variant="caption" fontWeight={600} color="text.primary">{label}</Typography>
+              <input
+                type="file"
+                multiple
+                accept={accept}
+                hidden
+                ref={(el) => { inputRefs.current[key] = el; }}
+                onChange={(e) => fileChangeHandler(e, option)}
+              />
+            </Box>
+          );
+        })}
+      </Stack>
+      <Typography variant="caption" color="text.disabled" display="block" textAlign="center" mt={1}>
+        Up to {MAX_FILES} files · {MAX_FILE_MB} MB each
+      </Typography>
+    </Popover>
+  );
+};
 
-          <MenuItem onClick={selectAudio}>
-            <Tooltip title="Audio">
-              <AudioFile />
-            </Tooltip>
-
-            <ListItemText style={{ marginLeft: "0.5rem" }}>Audio</ListItemText>
-            <input
-              type="file"
-              multiple
-              accept="audio/mpeg, audio/wav"
-              style={{
-                display: "none"
-              }}
-              onChange={(e) => fileChangeHandler(e, "Audios")}
-              ref={audioRef}
-            />
-          </MenuItem>
-
-          <MenuItem onClick={selectVideo}>
-            <Tooltip title="Video">
-              <VideoFile />
-            </Tooltip>
-
-            <ListItemText style={{ marginLeft: "0.5rem" }}>Video</ListItemText>
-            <input
-              type="file"
-              multiple
-              accept="video/mp4, video/webm, video/ogg"
-              style={{
-                display: "none"
-              }}
-              onChange={(e) => fileChangeHandler(e, "Videos")}
-              ref={videoRef}
-            />
-          </MenuItem>
-
-          <MenuItem onClick={selectFile}>
-            <Tooltip title="File">
-              <UploadFile />
-            </Tooltip>
-
-            <ListItemText style={{ marginLeft: "0.5rem" }}>File</ListItemText>
-            <input
-              type="file"
-              multiple
-              accept="*"
-              style={{
-                display: "none"
-              }}
-              onChange={(e) => fileChangeHandler(e, "Files")}
-              ref={fileRef}
-            />
-          </MenuItem>
-        </MenuList>
-      </div>
-    </Menu>
-  )
-}
-
-export default FileMenu
+export default FileMenu;
