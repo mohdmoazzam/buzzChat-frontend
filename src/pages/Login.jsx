@@ -26,6 +26,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
 import { ButtonLoader } from '../components/layout/Loaders';
+import { APP_MAX_WIDTH } from '../constants/theme';
 import { VisuallyHiddenInput } from '../components/styles/StyledComponent';
 import { orange } from "../constants/color";
 import { server } from "../constants/config";
@@ -208,7 +209,8 @@ const Login = () => {
         sx={{
           display: "flex",
           width: "100%",
-          maxWidth: { lg: 1200 },
+          // Same width as the main app column (APP_MAX_WIDTH in constants/theme)
+          maxWidth: { lg: APP_MAX_WIDTH },
           minHeight: "100vh",
           overflow: "hidden",
           bgcolor: { lg: "#fff" },

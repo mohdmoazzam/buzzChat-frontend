@@ -7,6 +7,9 @@ export const brandGradient = `linear-gradient(145deg, ${orange} 0%, #c94f7c 100%
 export const borderColor = "#ececf0";
 export const surfaceMuted = "#f6f6f8";
 
+// Max width of the app column on large screens (chat app and login share it)
+export const APP_MAX_WIDTH = 1440;
+
 const theme = createTheme({
     palette: {
         primary: { main: orange, dark: accentDark, contrastText: "#fff" },

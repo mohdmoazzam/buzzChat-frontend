@@ -19,9 +19,7 @@ import DeleteChatMenu from "../dialogs/DeleteChatMenu";
 import Title from "../shared/Title";
 import ChatList from "../specific/ChatList";
 import Header from "./Header";
-
-// The whole app is centered with side gutters above this width
-export const APP_MAX_WIDTH = 1440;
+import { APP_MAX_WIDTH } from "../../constants/theme";
 
 const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
   return (props) => {
