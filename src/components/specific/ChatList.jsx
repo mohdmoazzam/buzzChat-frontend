@@ -1,6 +1,6 @@
 import { ForumOutlined as ForumIcon, Search as SearchIcon } from "@mui/icons-material";
-import { Box, Button, InputAdornment, InputBase, Skeleton, Stack, Typography } from "@mui/material";
-import React, { useMemo, useState } from "react";
+import { Box, Button, CircularProgress, InputAdornment, InputBase, Skeleton, Stack, Typography } from "@mui/material";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { setIsSearch } from "../../redux/reducers/misc";
 import ChatItem from "../shared/ChatItem";
@@ -14,9 +14,26 @@ const ChatList = ({
   handleDeleteChat,
   isLoading = false,
   onSelect,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
 }) => {
   const dispatch = useDispatch();
   const [filter, setFilter] = useState("");
+  const scrollRef = useRef(null);
+  const sentinelRef = useRef(null);
+
+  // Load the next page when the bottom of the list scrolls into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || !onLoadMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && onLoadMore(),
+      { root: scrollRef.current, rootMargin: "120px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore]);
 
   const filteredChats = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -48,7 +65,7 @@ const ChatList = ({
         />
       </Box>
 
-      <Box className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", pb: 2 }}>
+      <Box ref={scrollRef} className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", pb: 2 }}>
         {isLoading ? (
           <Stack spacing={1.5} px={2} pt={1}>
             {Array.from({ length: 6 }).map((_, i) => (
@@ -90,6 +107,13 @@ const ChatList = ({
                 />
               );
             })}
+            {/* Infinite-scroll trigger + loader */}
+            <Box ref={sentinelRef} sx={{ height: 1 }} />
+            {isLoadingMore && (
+              <Stack alignItems="center" sx={{ py: 1.5 }}>
+                <CircularProgress size={20} sx={{ color: "text.disabled" }} />
+              </Stack>
+            )}
           </Stack>
         ) : (
           <Stack alignItems="center" textAlign="center" spacing={1.5} px={3} pt={6}>

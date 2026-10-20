@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { useErrors, useSocketsEvents } from "../../hooks/hook";
 import { getOrSaveFromLocalStorage } from "../../lib/features";
-import api, { useMyChatsQuery } from "../../redux/api/api";
+import api, { CHAT_PAGE_SIZE, useMyChatsQuery } from "../../redux/api/api";
 import {
   incrementNotification,
   setNewMessagesAlert,
@@ -21,8 +21,12 @@ import ChatList from "../specific/ChatList";
 import Header from "./Header";
 import { APP_MAX_WIDTH } from "../../constants/theme";
 
+// Most recently active chats first
+const CHAT_ORDER_BY = "updatedAt";
+const CHAT_ORDER = "desc";
+
 const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
-  return (props) => {
+  return function AppLayoutWrapper(props) {
     const socket = getSocket();
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -35,7 +39,26 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     const [onlineUsers, setOnlineUsers] = useState([]);
 
-    const { isLoading, data, isError, error, refetch } = useMyChatsQuery("");
+    // Infinite scroll: each page is merged into one cached list (see myChats in api.js)
+    const [chatPage, setChatPage] = useState(1);
+    const { isLoading, isFetching, data, isError, error, refetch } = useMyChatsQuery({
+      page: chatPage,
+      take: CHAT_PAGE_SIZE,
+      orderBy: CHAT_ORDER_BY,
+      order: CHAT_ORDER,
+    });
+    const hasMoreChats = Boolean(data?.pagination?.hasMore);
+
+    const loadMoreChats = useCallback(() => {
+      if (hasMoreChats && !isFetching) setChatPage((page) => page + 1);
+    }, [hasMoreChats, isFetching]);
+
+    // Start over from the newest chats (page 1 replaces the merged list)
+    const reloadFirstPage = useCallback(() => {
+      if (chatPage === 1) return refetch();
+      setChatPage(1);
+      return null;
+    }, [chatPage, refetch]);
 
     useErrors([{ isError, error }]);
 
@@ -67,13 +90,15 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       dispatch(incrementNotification());
     }, [dispatch]);
 
-    // Only leave the open chat if it no longer exists (deleted, or you were removed)
+    // Only leave the open chat if it no longer exists (deleted, or you were removed).
+    // With a partial list the chat may just be on a later page, so only check a complete one.
     const refetchListener = useCallback(async () => {
-      const { data: fresh } = await refetch();
-      if (chatId && fresh && !fresh.chats?.some((chat) => chat._id === chatId)) {
+      const result = await reloadFirstPage();
+      const fresh = result?.data;
+      if (chatId && fresh && !fresh.pagination?.hasMore && !fresh.chats?.some((chat) => chat._id === chatId)) {
         navigate("/");
       }
-    }, [refetch, navigate, chatId]);
+    }, [reloadFirstPage, navigate, chatId]);
 
     const onlineUsersListener = useCallback((data) => {
       setOnlineUsers(data);
@@ -84,7 +109,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       if (!messageChatId || !message) return;
       let found = false;
       dispatch(
-        api.util.updateQueryData("myChats", "", (draft) => {
+        api.util.updateQueryData("myChats", {}, (draft) => {
           const index = draft?.chats?.findIndex((chat) => chat._id === messageChatId) ?? -1;
           if (index === -1) return;
           found = true;
@@ -98,9 +123,9 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
           draft.chats.unshift(chat);
         })
       );
-      // A chat we don't have yet (e.g. just added to a group): fetch the list
-      if (!found) refetch();
-    }, [dispatch, refetch]);
+      // Not loaded yet (new chat, or on a later page): reload page 1, where it now sits on top
+      if (!found) reloadFirstPage();
+    }, [dispatch, reloadFirstPage]);
 
     const eventHandler = {
       NEW_MESSAGE: chatPreviewListener,
@@ -124,6 +149,9 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       newMessagesAlert,
       onlineUsers,
       isLoading,
+      hasMore: hasMoreChats,
+      isLoadingMore: isFetching && chatPage > 1,
+      onLoadMore: loadMoreChats,
     };
 
     return (

@@ -2,6 +2,8 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { server } from "../../constants/config";
 
 
+export const CHAT_PAGE_SIZE = 20;
+
 const api = createApi({
     reducerPath: "api",
     baseQuery: fetchBaseQuery({
@@ -18,10 +20,25 @@ const api = createApi({
     refetchOnFocus: true,
     refetchOnReconnect: true,
     endpoints: (builder) => ({
+        // Paginated; every page is merged into one cached list for infinite scroll
         myChats: builder.query({
-            query: () => ({
-                url: "chat/my", credentials: "include"
+            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updatedAt", order = "desc" } = {}) => ({
+                url: "chat/my",
+                params: { page, take, orderBy, order },
+                credentials: "include"
             }),
+            serializeQueryArgs: ({ endpointName }) => endpointName,
+            merge: (current, incoming, { arg }) => {
+                // Page 1 (initial load or refresh) replaces the list; later pages append
+                if (!arg?.page || arg.page === 1) return incoming;
+                const seen = new Set(current.chats.map((chat) => chat._id));
+                current.chats.push(...incoming.chats.filter((chat) => !seen.has(chat._id)));
+                current.pagination = incoming.pagination;
+            },
+            forceRefetch: ({ currentArg, previousArg }) =>
+                currentArg?.page !== previousArg?.page ||
+                currentArg?.orderBy !== previousArg?.orderBy ||
+                currentArg?.order !== previousArg?.order,
             keepUnusedDataFor: 0,
             providesTags: ["Chat"],
         }),
