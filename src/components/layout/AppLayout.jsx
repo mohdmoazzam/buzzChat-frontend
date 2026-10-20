@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { useErrors, useSocketsEvents } from "../../hooks/hook";
 import { getOrSaveFromLocalStorage } from "../../lib/features";
-import { useMyChatsQuery } from "../../redux/api/api";
+import api, { useMyChatsQuery } from "../../redux/api/api";
 import {
   incrementNotification,
   setNewMessagesAlert,
@@ -79,7 +79,31 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       setOnlineUsers(data);
     }, []);
 
+    // Keep the chat list preview live: update the last message and move the chat to the top
+    const chatPreviewListener = useCallback(({ chatId: messageChatId, message } = {}) => {
+      if (!messageChatId || !message) return;
+      let found = false;
+      dispatch(
+        api.util.updateQueryData("myChats", "", (draft) => {
+          const index = draft?.chats?.findIndex((chat) => chat._id === messageChatId) ?? -1;
+          if (index === -1) return;
+          found = true;
+          const [chat] = draft.chats.splice(index, 1);
+          chat.lastMessage = {
+            content: message.content ?? "",
+            attachments: (message.attachments ?? []).map(({ url }) => ({ url })),
+            createdAt: message.createdAt,
+            sender: { _id: message.sender?._id, name: message.sender?.name },
+          };
+          draft.chats.unshift(chat);
+        })
+      );
+      // A chat we don't have yet (e.g. just added to a group): fetch the list
+      if (!found) refetch();
+    }, [dispatch, refetch]);
+
     const eventHandler = {
+      NEW_MESSAGE: chatPreviewListener,
       NEW_MESSAGE_ALERT: newMessageAlertListener,
       NEW_REQUEST: newRequestAlertListener,
       REFETCH_CHATS: refetchListener,

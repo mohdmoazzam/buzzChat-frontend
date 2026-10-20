@@ -14,6 +14,17 @@ const fileFormat = (url = "") => {
     return "file";
 };
 
+// Chat-list timestamp: time today, "Yesterday", weekday this week, otherwise a date
+const formatChatTime = (date) => {
+    if (!date) return "";
+    const d = moment(date);
+    const now = moment();
+    if (d.isSame(now, "day")) return d.format("h:mm A");
+    if (d.isSame(now.clone().subtract(1, "day"), "day")) return "Yesterday";
+    if (now.diff(d, "days") < 7) return d.format("dddd");
+    return d.isSame(now, "year") ? d.format("D MMM") : d.format("DD/MM/YY");
+};
+
 const transformImage = (url = "", width = 100) => {
     const newUrl = url?.replace("upload/", `upload/dpr_auto/w_${width}/`);
     return newUrl;
@@ -37,4 +48,4 @@ const getOrSaveFromLocalStorage = ({ key, value, get }) => {
     }
 };
 
-export { fileFormat, transformImage, getLast7Days, getOrSaveFromLocalStorage };
+export { fileFormat, transformImage, getLast7Days, getOrSaveFromLocalStorage, formatChatTime };

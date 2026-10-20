@@ -64,7 +64,7 @@ const ChatList = ({
         ) : filteredChats.length > 0 ? (
           <Stack spacing={0.5}>
             {filteredChats.map((chat) => {
-              const { _id, name, groupChat, avatar, members } = chat;
+              const { _id, name, groupChat, avatar, members, lastMessage } = chat;
 
               const newMessageAlert = newMessagesAlert?.find(
                 ({ chatId }) => chatId === _id
@@ -83,6 +83,7 @@ const ChatList = ({
                   name={name}
                   _id={_id}
                   groupChat={groupChat}
+                  lastMessage={lastMessage}
                   sameSender={chatId === _id}
                   handleDeleteChat={handleDeleteChat}
                   onSelect={onSelect}

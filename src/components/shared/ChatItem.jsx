@@ -1,12 +1,57 @@
+import {
+  AudiotrackRounded as AudioIcon,
+  DescriptionRounded as FileIcon,
+  ImageRounded as ImageIcon,
+  VideocamRounded as VideoIcon,
+} from '@mui/icons-material';
 import { Box, Stack, Typography } from '@mui/material';
 import React, { memo } from 'react';
+import { useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
 import { orange } from '../../constants/color';
 import { accentSoft } from '../../constants/theme';
+import { fileFormat, formatChatTime } from '../../lib/features';
 import AvatarCard from './AvatarCard';
 
-const ChatItem = ({ avatar = [], name, _id, groupChat = false, sameSender, isOnline, newMessageAlert, handleDeleteChat, onSelect }) => {
+const ATTACHMENT_LABELS = {
+  image: { label: "Photo", Icon: ImageIcon },
+  video: { label: "Video", Icon: VideoIcon },
+  audio: { label: "Audio", Icon: AudioIcon },
+  file: { label: "File", Icon: FileIcon },
+};
+
+// "You: hi", "Aisha: hi" (groups), "📷 Photo", or a group/online hint when empty
+const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
+  if (!lastMessage) {
+    return groupChat ? "Group chat" : isOnline ? "Online" : "No messages yet";
+  }
+
+  const mine = lastMessage.sender?._id === myId;
+  const prefix = mine ? "You: " : groupChat ? `${lastMessage.sender?.name?.split(" ")[0] ?? ""}: ` : "";
+  const attachments = lastMessage.attachments ?? [];
+
+  if (!lastMessage.content && attachments.length) {
+    const { label, Icon } = ATTACHMENT_LABELS[fileFormat(attachments[0].url)] ?? ATTACHMENT_LABELS.file;
+    const text = attachments.length > 1 ? `${attachments.length} ${label === "Audio" ? "audio files" : `${label.toLowerCase()}s`}` : label;
+    return (
+      <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+        {prefix}
+        <Icon sx={{ fontSize: 16, flexShrink: 0, color: unread ? "text.primary" : "text.disabled" }} />
+        <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{text}</Box>
+      </Box>
+    );
+  }
+
+  return `${prefix}${lastMessage.content}`;
+};
+
+const ChatItem = ({
+  avatar = [], name, _id, groupChat = false, sameSender, isOnline, newMessageAlert, lastMessage,
+  handleDeleteChat, onSelect,
+}) => {
+  const myId = useSelector((state) => state.auth.user?._id);
   const unread = newMessageAlert?.count || 0;
+  const time = formatChatTime(lastMessage?.createdAt);
 
   return (
     <Box
@@ -45,32 +90,52 @@ const ChatItem = ({ avatar = [], name, _id, groupChat = false, sameSender, isOnl
         )}
       </Box>
 
-      <Stack sx={{ minWidth: 0, flex: 1 }}>
-        <Typography noWrap fontWeight={unread ? 700 : 600} fontSize="0.95rem">{name}</Typography>
-        <Typography noWrap variant="body2" color={unread ? "text.primary" : "text.secondary"} fontWeight={unread ? 600 : 400}>
-          {unread
-            ? `${unread} new message${unread > 1 ? "s" : ""}`
-            : groupChat ? "Group chat" : isOnline ? "Online" : "Tap to open chat"}
-        </Typography>
-      </Stack>
+      <Stack sx={{ minWidth: 0, flex: 1 }} spacing={0.25}>
+        {/* Name + time */}
+        <Stack direction="row" alignItems="baseline" spacing={1}>
+          <Typography noWrap fontWeight={unread ? 700 : 600} fontSize="0.95rem" sx={{ flex: 1, minWidth: 0 }}>
+            {name}
+          </Typography>
+          {time && (
+            <Typography
+              variant="caption"
+              sx={{ flexShrink: 0, color: unread ? orange : "text.secondary", fontWeight: unread ? 600 : 400 }}
+            >
+              {time}
+            </Typography>
+          )}
+        </Stack>
 
-      {unread > 0 && (
-        <Box sx={{
-          minWidth: 22,
-          height: 22,
-          px: 0.75,
-          borderRadius: "11px",
-          bgcolor: orange,
-          color: "#fff",
-          fontSize: "0.75rem",
-          fontWeight: 700,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}>
-          {unread > 99 ? "99+" : unread}
-        </Box>
-      )}
+        {/* Preview + unread badge */}
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Typography
+            noWrap
+            variant="body2"
+            component="div"
+            sx={{ flex: 1, minWidth: 0, color: unread ? "text.primary" : "text.secondary", fontWeight: unread ? 600 : 400 }}
+          >
+            <Preview lastMessage={lastMessage} groupChat={groupChat} isOnline={isOnline} unread={unread} myId={myId} />
+          </Typography>
+          {unread > 0 && (
+            <Box sx={{
+              minWidth: 20,
+              height: 20,
+              px: 0.75,
+              borderRadius: "10px",
+              bgcolor: orange,
+              color: "#fff",
+              fontSize: "0.7rem",
+              fontWeight: 700,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              {unread > 99 ? "99+" : unread}
+            </Box>
+          )}
+        </Stack>
+      </Stack>
     </Box>
   )
 }
