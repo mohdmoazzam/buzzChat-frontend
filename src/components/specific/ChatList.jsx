@@ -1,6 +1,6 @@
-import { ForumOutlined as ForumIcon, Search as SearchIcon } from "@mui/icons-material";
-import { Box, Button, CircularProgress, InputAdornment, InputBase, Skeleton, Stack, Typography } from "@mui/material";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { CloseRounded as ClearIcon, ForumOutlined as ForumIcon, Search as SearchIcon } from "@mui/icons-material";
+import { Box, Button, CircularProgress, IconButton, InputAdornment, InputBase, Skeleton, Stack, Typography } from "@mui/material";
+import React, { useEffect, useRef } from "react";
 import { useDispatch } from "react-redux";
 import { setIsSearch } from "../../redux/reducers/misc";
 import ChatItem from "../shared/ChatItem";
@@ -17,9 +17,12 @@ const ChatList = ({
   hasMore = false,
   isLoadingMore = false,
   onLoadMore,
+  search = "",
+  onSearchChange,
+  isSearching = false,
 }) => {
   const dispatch = useDispatch();
-  const [filter, setFilter] = useState("");
+  const hasSearch = search.trim().length > 0;
   const scrollRef = useRef(null);
   const sentinelRef = useRef(null);
 
@@ -35,25 +38,31 @@ const ChatList = ({
     return () => observer.disconnect();
   }, [hasMore, onLoadMore]);
 
-  const filteredChats = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return chats ?? [];
-    return (chats ?? []).filter((chat) => chat.name?.toLowerCase().includes(q));
-  }, [chats, filter]);
+  const visibleChats = chats ?? [];
 
   return (
     <Stack width={w} height="100%" sx={{ bgcolor: "#fff" }}>
       <Box sx={{ px: 2, pt: 2.5, pb: 1.5 }}>
         <Typography variant="h6" fontWeight={700} mb={1.5}>Chats</Typography>
         <InputBase
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
+          value={search}
+          onChange={(e) => onSearchChange?.(e.target.value)}
           placeholder="Search chats"
           fullWidth
+          inputProps={{ "aria-label": "Search chats", maxLength: 50 }}
           startAdornment={
             <InputAdornment position="start">
               <SearchIcon sx={{ fontSize: 20, color: "text.disabled" }} />
             </InputAdornment>
+          }
+          endAdornment={
+            isSearching ? (
+              <CircularProgress size={16} sx={{ color: "text.disabled", mr: 0.5 }} />
+            ) : hasSearch ? (
+              <IconButton size="small" onClick={() => onSearchChange?.("")} aria-label="Clear search" sx={{ color: "text.disabled", p: 0.25 }}>
+                <ClearIcon fontSize="small" />
+              </IconButton>
+            ) : null
           }
           sx={{
             bgcolor: "#f4f4f6",
@@ -78,9 +87,9 @@ const ChatList = ({
               </Stack>
             ))}
           </Stack>
-        ) : filteredChats.length > 0 ? (
+        ) : visibleChats.length > 0 ? (
           <Stack spacing={0.5}>
-            {filteredChats.map((chat) => {
+            {visibleChats.map((chat) => {
               const { _id, name, groupChat, avatar, members, lastMessage } = chat;
 
               const newMessageAlert = newMessagesAlert?.find(
@@ -119,9 +128,14 @@ const ChatList = ({
           <Stack alignItems="center" textAlign="center" spacing={1.5} px={3} pt={6}>
             <ForumIcon sx={{ fontSize: 40, color: "text.disabled" }} />
             <Typography fontWeight={600}>
-              {filter ? "No chats match your search" : "No chats yet"}
+              {hasSearch ? "No chats match your search" : "No chats yet"}
             </Typography>
-            {!filter && (
+            {hasSearch && (
+              <Typography variant="body2" color="text.secondary">
+                Try a different name or username.
+              </Typography>
+            )}
+            {!hasSearch && (
               <>
                 <Typography variant="body2" color="text.secondary">
                   Find people and send a friend request to start chatting.

@@ -24,6 +24,7 @@ import { APP_MAX_WIDTH } from "../../constants/theme";
 // Most recently active chats first
 const CHAT_ORDER_BY = "updatedAt";
 const CHAT_ORDER = "desc";
+const SEARCH_DEBOUNCE_MS = 300;
 
 const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
   return function AppLayoutWrapper(props) {
@@ -41,11 +42,24 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     // Infinite scroll: each page is merged into one cached list (see myChats in api.js)
     const [chatPage, setChatPage] = useState(1);
+    const [chatSearch, setChatSearch] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+
+    // Ask the server only after the user pauses typing; a new search starts at page 1
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        setDebouncedSearch(chatSearch.trim());
+        setChatPage(1);
+      }, SEARCH_DEBOUNCE_MS);
+      return () => clearTimeout(timer);
+    }, [chatSearch]);
+
     const { isLoading, isFetching, data, isError, error, refetch } = useMyChatsQuery({
       page: chatPage,
       take: CHAT_PAGE_SIZE,
       orderBy: CHAT_ORDER_BY,
       order: CHAT_ORDER,
+      search: debouncedSearch,
     });
     const hasMoreChats = Boolean(data?.pagination?.hasMore);
 
@@ -152,6 +166,10 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       hasMore: hasMoreChats,
       isLoadingMore: isFetching && chatPage > 1,
       onLoadMore: loadMoreChats,
+      search: chatSearch,
+      onSearchChange: setChatSearch,
+      // Typing (not yet sent) or a page-1 search request in flight
+      isSearching: chatSearch.trim() !== debouncedSearch || (isFetching && chatPage === 1 && !!debouncedSearch),
     };
 
     return (

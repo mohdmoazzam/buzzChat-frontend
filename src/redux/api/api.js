@@ -22,9 +22,9 @@ const api = createApi({
     endpoints: (builder) => ({
         // Paginated; every page is merged into one cached list for infinite scroll
         myChats: builder.query({
-            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updatedAt", order = "desc" } = {}) => ({
+            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updatedAt", order = "desc", search = "" } = {}) => ({
                 url: "chat/my",
-                params: { page, take, orderBy, order },
+                params: { page, take, orderBy, order, ...(search ? { search } : {}) },
                 credentials: "include"
             }),
             serializeQueryArgs: ({ endpointName }) => endpointName,
@@ -38,7 +38,8 @@ const api = createApi({
             forceRefetch: ({ currentArg, previousArg }) =>
                 currentArg?.page !== previousArg?.page ||
                 currentArg?.orderBy !== previousArg?.orderBy ||
-                currentArg?.order !== previousArg?.order,
+                currentArg?.order !== previousArg?.order ||
+                currentArg?.search !== previousArg?.search,
             keepUnusedDataFor: 0,
             providesTags: ["Chat"],
         }),
