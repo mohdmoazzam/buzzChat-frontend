@@ -44,10 +44,14 @@ const api = createApi({
             providesTags: ["Chat"],
         }),
 
+        // Paginated people search (Find People)
         searchUser: builder.query({
-            query: (name) => ({
-                url: `user/search?name=${name}`, credentials: "include"
+            query: ({ search = "", page = 1, take = 20 } = {}) => ({
+                url: "user/search",
+                params: { page, take, ...(search ? { search } : {}) },
+                credentials: "include"
             }),
+            keepUnusedDataFor: 0,
         }),
 
         sendFriendRequest: builder.mutation({

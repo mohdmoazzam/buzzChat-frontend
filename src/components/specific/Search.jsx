@@ -20,13 +20,15 @@ import {
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { orange } from "../../constants/color";
 import { transformImage } from "../../lib/features";
 import { useLazySearchUserQuery, useSendFriendRequestMutation } from "../../redux/api/api";
 import { setIsNotification, setIsSearch } from "../../redux/reducers/misc";
+
+const PAGE_SIZE = 20;
 
 const Search = () => {
   const { isSearch } = useSelector((state) => state.misc);
@@ -38,27 +40,69 @@ const Search = () => {
   const [users, setUsers] = useState([]);
   const [isSearching, setIsSearching] = useState(true);
   const [pendingIds, setPendingIds] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const latestSearch = useRef(0);
+  const resultsRef = useRef(null);
+  const sentinelRef = useRef(null);
 
   const [searchUser] = useLazySearchUserQuery();
   const [sendFriendRequest] = useSendFriendRequestMutation();
 
   const closeHandler = () => dispatch(setIsSearch(false));
 
-  // Debounced search; ignore responses that arrive out of order
+  // Debounced search for page 1; ignore responses that arrive out of order
   useEffect(() => {
     const searchId = ++latestSearch.current;
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const { data } = await searchUser(query.trim());
-        if (searchId === latestSearch.current) setUsers(data?.data ?? []);
+        const { data } = await searchUser({ search: query.trim(), page: 1, take: PAGE_SIZE });
+        if (searchId !== latestSearch.current) return;
+        setUsers(data?.data ?? []);
+        setPagination(data?.pagination ?? null);
+        setPage(1);
       } finally {
         if (searchId === latestSearch.current) setIsSearching(false);
       }
     }, query ? 350 : 0);
     return () => clearTimeout(timer);
   }, [query, searchUser]);
+
+  const hasMore = Boolean(pagination?.hasMore);
+
+  // Next page for the same search, appended to the list
+  const loadMore = useCallback(async () => {
+    if (!hasMore || isSearching || isLoadingMore) return;
+    const searchId = latestSearch.current;
+    const nextPage = page + 1;
+    setIsLoadingMore(true);
+    try {
+      const { data } = await searchUser({ search: query.trim(), page: nextPage, take: PAGE_SIZE });
+      if (searchId !== latestSearch.current || !data) return;
+      setUsers((list) => {
+        const seen = new Set(list.map((u) => u._id));
+        return [...list, ...data.data.filter((u) => !seen.has(u._id))];
+      });
+      setPagination(data.pagination);
+      setPage(nextPage);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isSearching, isLoadingMore, page, query, searchUser]);
+
+  // Load more when the bottom of the results scrolls into view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry.isIntersecting && loadMore(),
+      { root: resultsRef.current, rootMargin: "120px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore]);
 
   const addFriendHandler = async (user) => {
     setPendingIds((ids) => [...ids, user._id]);
@@ -133,10 +177,10 @@ const Search = () => {
       <Divider />
 
       {/* Results */}
-      <Box className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", px: 1.5, pt: 1.5, pb: 2 }}>
+      <Box ref={resultsRef} className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", px: 1.5, pt: 1.5, pb: 2 }}>
         {!isSearching && users.length > 0 && (
           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ px: 1, display: "block", mb: 0.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {query.trim() ? `${users.length} result${users.length > 1 ? "s" : ""}` : "People you may know"}
+            {query.trim() ? `${pagination?.total ?? users.length} result${(pagination?.total ?? users.length) === 1 ? "" : "s"}` : "People you may know"}
           </Typography>
         )}
 
@@ -176,6 +220,13 @@ const Search = () => {
                 onRespond={openNotifications}
               />
             ))}
+          </Stack>
+        )}
+        {/* Infinite-scroll trigger + loader */}
+        {!isSearching && hasMore && <Box ref={sentinelRef} sx={{ height: 1 }} />}
+        {isLoadingMore && (
+          <Stack alignItems="center" sx={{ py: 1.5 }}>
+            <CircularProgress size={20} sx={{ color: "text.disabled" }} />
           </Stack>
         )}
       </Box>
