@@ -23,7 +23,7 @@ const api = createApi({
         // Paginated; every page is merged into one cached list for infinite scroll
         myChats: builder.query({
             query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updated_at", order = "desc", search = "" } = {}) => ({
-                url: "chat/my",
+                url: "chat",
                 params: { page, take, order_by: orderBy, order, ...(search ? { search } : {}) },
                 credentials: "include"
             }),
@@ -56,7 +56,7 @@ const api = createApi({
 
         sendFriendRequest: builder.mutation({
             query: (data) => ({
-                url: "user/sendRequest",
+                url: "user/friend-requests",
                 method: "POST",
                 credentials: "include",
                 body: data
@@ -65,11 +65,12 @@ const api = createApi({
         }),
 
         acceptFriendRequest: builder.mutation({
-            query: (data) => ({
-                url: "user/acceptRequest",
+            // { request_id, accept }
+            query: ({ request_id, accept }) => ({
+                url: `user/friend-requests/${request_id}`,
                 method: "PUT",
                 credentials: "include",
-                body: data
+                body: { accept }
             }),
             keepUnusedDataFor: 0,
             // Show the new friend right away, even if the socket event is missed
@@ -78,7 +79,7 @@ const api = createApi({
 
         getNotifications: builder.query({
             query: () => ({
-                url: `user/myNotifications`, credentials: "include"
+                url: "user/friend-requests", credentials: "include"
             }),
             keepUnusedDataFor: 0,
             providesTags: ["Notifications"],
@@ -97,7 +98,7 @@ const api = createApi({
 
         getChatMessages: builder.query({
             query: ({ chatId, page }) => ({
-                url: `chat/message/${chatId}?page=${page}`,
+                url: `chat/${chatId}/messages?page=${page}`,
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
@@ -114,18 +115,18 @@ const api = createApi({
 
         // { chat_id, attachment_ids }
         sendAttachments: builder.mutation({
-            query: (data) => ({
-                url: "chat/message",
+            query: ({ chat_id, attachment_ids }) => ({
+                url: `chat/${chat_id}/messages`,
                 method: "POST",
                 credentials: "include",
-                body: data
+                body: { attachment_ids }
             }),
             keepUnusedDataFor: 0,
         }),
 
         myGroups: builder.query({
             query: () => ({
-                url: "chat/my/groups",
+                url: "chat/groups",
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
@@ -134,7 +135,7 @@ const api = createApi({
 
         availableFriends: builder.query({
             query: (chatId) => {
-                let url = `user/myFriends`;
+                let url = "user/friends";
                 if (chatId) url += `?chat_id=${chatId}`;
                 return {
                     url: url, credentials: "include"
@@ -146,7 +147,7 @@ const api = createApi({
         newGroup: builder.mutation({
             // { name, description, members, avatar_id? }
             query: (body) => ({
-                url: "chat/new",
+                url: "chat/groups",
                 method: "POST",
                 credentials: "include",
                 body
@@ -168,20 +169,19 @@ const api = createApi({
 
         removeGroupMember: builder.mutation({
             query: ({ chatId, userId }) => ({
-                url: "chat/removeMember",
-                method: "PUT",
-                credentials: "include",
-                body: { chat_id: chatId, user_id: userId }
+                url: `chat/${chatId}/members/${userId}`,
+                method: "DELETE",
+                credentials: "include"
             }),
             invalidatesTags: ["Chat"]
         }),
 
         addGroupMembers: builder.mutation({
             query: ({ members, chatId }) => ({
-                url: "chat/addMembers",
-                method: "PUT",
+                url: `chat/${chatId}/members`,
+                method: "POST",
                 credentials: "include",
-                body: { members, chat_id: chatId }
+                body: { members }
             }),
             invalidatesTags: ["Chat"]
         }),
@@ -197,7 +197,7 @@ const api = createApi({
 
         leaveGroup: builder.mutation({
             query: (chatId ) => ({
-                url: `chat/leave/${chatId}`,
+                url: `chat/${chatId}/members/me`,
                 method: "DELETE",
                 credentials: "include"
             }),
