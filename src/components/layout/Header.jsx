@@ -1,28 +1,36 @@
 import {
-  Add as AddIcon,
-  Group as GroupIcon,
+  ChatBubbleRounded as ChatIcon,
+  EditOutlined as EditIcon,
+  PersonOutline as PersonIcon,
+  GroupAddOutlined as AddIcon,
+  GroupsOutlined as GroupIcon,
   Logout as LogoutIcon,
   Menu as MenuIcon,
-  Notifications as NotificationsIcon,
-  Search as SearchIcon,
+  NotificationsNoneOutlined as NotificationsIcon,
+  PersonSearchOutlined as SearchIcon,
 } from "@mui/icons-material";
 import {
-  AppBar,
+  Avatar,
   Backdrop,
   Badge,
   Box,
+  Divider,
   IconButton,
-  Toolbar,
+  ListItemIcon,
+  Menu,
+  MenuItem,
+  Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
-import { orange } from "../../constants/color";
+import { Link, useNavigate } from "react-router-dom";
 import { server } from "../../constants/config";
+import { brandGradient } from "../../constants/theme";
+import { transformImage } from "../../lib/features";
 import { userNotExists } from "../../redux/reducers/auth";
 import { resetNotification } from "../../redux/reducers/chat";
 import {
@@ -42,6 +50,8 @@ const Header = () => {
     (state) => state.misc
   );
   const { notificationCount } = useSelector((state) => state.chat);
+  const { user } = useSelector((state) => state.auth);
+  const [accountAnchor, setAccountAnchor] = useState(null);
 
   const handleMobile = () => {
     dispatch(setIsMobileMenu(true));
@@ -59,7 +69,13 @@ const Header = () => {
     navigate("/groups");
   };
 
+  const goTo = (path) => {
+    setAccountAnchor(null);
+    navigate(path);
+  };
+
   const handleLogout = async () => {
+    setAccountAnchor(null);
     try {
       await axios.get(`${server}/api/v1/user/logout`, { withCredentials: true });
     } catch (err) {
@@ -76,52 +92,108 @@ const Header = () => {
 
   return (
     <>
-      <Box sx={{ flexGrow: 1 }} height={"4rem"}>
-        <AppBar position="static" sx={{ bgcolor: orange }}>
-          <Toolbar>
-            <Typography
-              variant="h6"
-              sx={{ display: { xs: "none", sm: "block" } }}
-            >
-              BuzzChat
-            </Typography>
-            <Box sx={{ display: { xs: "block", sm: "none" } }}>
-              <IconButton color="inherit" onClick={handleMobile}>
-                <MenuIcon />
-              </IconButton>
-            </Box>
-            <Box sx={{ flexGrow: 1 }} />
-            <Box>
-              <IconBtn
-                title={"Search"}
-                icon={<SearchIcon />}
-                onClick={openSearchDialog}
-              />
-              <IconBtn
-                title={"New Group"}
-                icon={<AddIcon />}
-                onClick={openNewGroup}
-              />
-              <IconBtn
-                title={"Manage Group"}
-                icon={<GroupIcon />}
-                onClick={navigateToGroup}
-              />
-              <IconBtn
-                title={"Notifications"}
-                icon={<NotificationsIcon />}
-                onClick={openNotifications}
-                value={notificationCount}
-              />
-              <IconBtn
-                title={"Logout"}
-                icon={<LogoutIcon />}
-                onClick={handleLogout}
-              />
-            </Box>
-          </Toolbar>
-        </AppBar>
+      <Box
+        component="header"
+        sx={{
+          height: "4rem",
+          px: { xs: 1, sm: 2.5 },
+          display: "flex",
+          alignItems: "center",
+          bgcolor: "#fff",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          flexShrink: 0,
+        }}
+      >
+        <IconButton
+          onClick={handleMobile}
+          aria-label="Open chats"
+          sx={{ display: { xs: "inline-flex", sm: "none" }, mr: 0.5 }}
+        >
+          <MenuIcon />
+        </IconButton>
+
+        <Stack
+          component={Link}
+          to="/"
+          direction="row"
+          alignItems="center"
+          spacing={1.25}
+          sx={{ textDecoration: "none", color: "text.primary" }}
+        >
+          <Box
+            sx={{
+              width: 34,
+              height: 34,
+              borderRadius: "10px",
+              background: brandGradient,
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <ChatIcon sx={{ fontSize: 19 }} />
+          </Box>
+          <Typography variant="h6" fontWeight={700} sx={{ display: { xs: "none", sm: "block" } }}>
+            BuzzChat
+          </Typography>
+        </Stack>
+
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Stack direction="row" alignItems="center" spacing={{ xs: 0, sm: 0.5 }}>
+          <IconBtn title="Find people" icon={<SearchIcon />} onClick={openSearchDialog} />
+          <IconBtn title="New group" icon={<AddIcon />} onClick={openNewGroup} />
+          <IconBtn title="Manage groups" icon={<GroupIcon />} onClick={navigateToGroup} />
+          <IconBtn
+            title="Notifications"
+            icon={<NotificationsIcon />}
+            onClick={openNotifications}
+            value={notificationCount}
+          />
+
+          <Tooltip title="Account">
+            <IconButton onClick={(e) => setAccountAnchor(e.currentTarget)} sx={{ ml: { xs: 0.5, sm: 1 } }}>
+              <Avatar src={transformImage(user?.avatar?.url)} sx={{ width: 34, height: 34 }} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Box>
+
+      <Menu
+        anchorEl={accountAnchor}
+        open={Boolean(accountAnchor)}
+        onClose={() => setAccountAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{ paper: { sx: { mt: 1, minWidth: 220, borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" } } }}
+      >
+        <Box sx={{ px: 2, py: 1.25 }}>
+          <Typography fontWeight={600} noWrap>{user?.name}</Typography>
+          <Typography variant="body2" color="text.secondary" noWrap>@{user?.username}</Typography>
+        </Box>
+        <Divider />
+        <MenuItem onClick={() => goTo("/profile")} sx={{ mt: 0.5 }}>
+          <ListItemIcon>
+            <PersonIcon fontSize="small" />
+          </ListItemIcon>
+          Profile
+        </MenuItem>
+        <MenuItem onClick={() => goTo("/profile/edit")}>
+          <ListItemIcon>
+            <EditIcon fontSize="small" />
+          </ListItemIcon>
+          Edit profile
+        </MenuItem>
+        <Divider />
+        <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
+          <ListItemIcon sx={{ color: "inherit" }}>
+            <LogoutIcon fontSize="small" />
+          </ListItemIcon>
+          Log out
+        </MenuItem>
+      </Menu>
 
       {isSearch && (
         <Suspense fallback={<Backdrop open />}>
@@ -147,9 +219,9 @@ const Header = () => {
 const IconBtn = ({ title, icon, onClick, value }) => {
   return (
     <Tooltip title={title}>
-      <IconButton color="inherit" size="large" onClick={onClick}>
+      <IconButton onClick={onClick} aria-label={title} sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}>
         {value ? (
-          <Badge badgeContent={value} color="error">
+          <Badge badgeContent={value} color="primary">
             {icon}
           </Badge>
         ) : (

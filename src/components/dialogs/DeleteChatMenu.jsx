@@ -1,4 +1,4 @@
-import { Menu, Stack, Typography } from '@mui/material'
+import { ListItemIcon, Menu, MenuItem, Typography } from '@mui/material'
 import React, { useEffect } from 'react'
 import { useSelector } from 'react-redux';
 import { setIsDeleteMenu } from '../../redux/reducers/misc';
@@ -48,35 +48,20 @@ const DeleteChatMenu = ({ dispatch, deleteOptionAnchor }) => {
                 horizontal: "right"
             }}
             transformOrigin={{
-                vertical: "center",
-                horizontal: "center"
+                vertical: "top",
+                horizontal: "right"
             }}
+            slotProps={{ paper: { sx: { borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" } } }}
         >
-            <Stack
-                sx={{
-                    width: "10rem",
-                    padding: "0.5rem",
-                    cursor: "pointer"
-                }}
-                direction={"row"}
-                alignItems={"center"}
-                spacing={"0.5rem"}
+            <MenuItem
                 onClick={isGroup ? leaveGroupHandler : deletChatHandler}
+                sx={{ color: "error.main", minWidth: "11rem" }}
             >
-                {
-                    isGroup ? (
-                        <>
-                            <ExitToApp />
-                            <Typography>Leave Group</Typography>
-                        </>
-                    ) : (
-                        <>
-                            <Delete />
-                            <Typography>Delete Chat</Typography>
-                        </>
-                    )
-                }
-            </Stack>
+                <ListItemIcon sx={{ color: "inherit" }}>
+                    {isGroup ? <ExitToApp fontSize="small" /> : <Delete fontSize="small" />}
+                </ListItemIcon>
+                <Typography>{isGroup ? "Leave group" : "Delete chat"}</Typography>
+            </MenuItem>
         </Menu>
     )
 }

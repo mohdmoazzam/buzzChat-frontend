@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import ProtectRoute from './components/auth/ProtectRoute';
-import { LayoutLoader } from './components/layout/Loaders';
+import { AppLoader } from './components/layout/Loaders';
 import axios from 'axios';
 import { server } from "./constants/config";
 import { useDispatch, useSelector } from 'react-redux';
@@ -13,6 +13,8 @@ const Login = lazy(() => import("./pages/Login"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Group = lazy(() => import("./pages/Group"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Profile = lazy(() => import("./pages/Profile"));
+const EditProfile = lazy(() => import("./pages/EditProfile"));
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -39,9 +41,9 @@ const App = () => {
 
 
   return (
-    loader ? (<LayoutLoader />) :
+    loader ? (<AppLoader />) :
       (<BrowserRouter>
-        <Suspense fallback={<LayoutLoader />}>
+        <Suspense fallback={<AppLoader />}>
 
           <Routes>
 
@@ -49,6 +51,8 @@ const App = () => {
               <Route path='/' element={<ProtectRoute user={user}><Home /></ProtectRoute>} />
               <Route path='/chat/:chatId' element={<Chat />} />
               <Route path='/groups' element={<Group />} />
+              <Route path='/profile' element={<Profile />} />
+              <Route path='/profile/edit' element={<EditProfile />} />
             </Route>
 
             <Route path='/login' element={<ProtectRoute user={!user} redirect='/'><Login /></ProtectRoute>} />

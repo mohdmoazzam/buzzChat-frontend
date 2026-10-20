@@ -1,4 +1,4 @@
-import { Drawer, Grid, Skeleton } from "@mui/material";
+import { Box, Drawer } from "@mui/material";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
@@ -18,13 +18,10 @@ import { getSocket } from "../../socket";
 import DeleteChatMenu from "../dialogs/DeleteChatMenu";
 import Title from "../shared/Title";
 import ChatList from "../specific/ChatList";
-import Profile from "../specific/Profile";
 import Header from "./Header";
 
-const AppLayout = () => (WrappedComponent) => {
+const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
   return (props) => {
-    const { user } = useSelector((state) => state.auth);
-
     const socket = getSocket();
     const dispatch = useDispatch();
     const navigate = useNavigate();
@@ -35,7 +32,7 @@ const AppLayout = () => (WrappedComponent) => {
     const { isMobileMenu } = useSelector((state) => state.misc);
     const { newMessagesAlert } = useSelector((state) => state.chat);
 
-    const [onlineUsers, setOnlineUsers] = useState(null);
+    const [onlineUsers, setOnlineUsers] = useState([]);
 
     const { isLoading, data, isError, error, refetch } = useMyChatsQuery("");
 
@@ -49,13 +46,10 @@ const AppLayout = () => (WrappedComponent) => {
     }, [newMessagesAlert]);
 
     const handleDeleteChat = (e, _id, groupChat) => {
+      e.preventDefault();
       dispatch(setIsDeleteMenu(true));
       dispatch(setSelectedDeleteChat({ chatId: _id, groupChat: groupChat }));
       deleteMenuAnchor.current = e.currentTarget;
-    };
-
-    const handleMobile = () => {
-      dispatch(setIsMobileMenu(true));
     };
 
     const handleMobileClose = () => dispatch(setIsMobileMenu(false));
@@ -77,12 +71,9 @@ const AppLayout = () => (WrappedComponent) => {
       navigate("/");
     }, [refetch, navigate]);
 
-    const onlineUsersListener = useCallback(
-      (data) => {
-        setOnlineUsers(data);
-      },
-      [dispatch]
-    );
+    const onlineUsersListener = useCallback((data) => {
+      setOnlineUsers(data);
+    }, []);
 
     const eventHandler = {
       NEW_MESSAGE_ALERT: newMessageAlertListener,
@@ -93,79 +84,70 @@ const AppLayout = () => (WrappedComponent) => {
 
     useSocketsEvents(socket, eventHandler);
 
+    const currentChat = data?.chats?.find((chat) => chat._id === chatId);
+    const isCurrentChatOnline = !!currentChat?.members?.some((member) => onlineUsers?.includes(member));
+
+    const listOnMobile = showListOnMobile && !chatId;
+
+    const chatListProps = {
+      chats: data?.chats,
+      chatId,
+      handleDeleteChat,
+      newMessagesAlert,
+      onlineUsers,
+      isLoading,
+    };
+
     return (
       <>
         <Title />
-        <Header />
+        <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "background.default" }}>
+          <Header />
 
-        {/* Mobile Drawer for chat list */}
-        {isLoading ? (
-          <Skeleton />
-        ) : (
-          <Drawer open={isMobileMenu} onClose={handleMobileClose}>
-            <ChatList
-              w="70vw"
-              chats={data?.chats}
-              chatId={chatId}
-              handleDeleteChat={handleDeleteChat}
-              newMessagesAlert={newMessagesAlert}
-              onlineUsers={onlineUsers}
-            />
-          </Drawer>
-        )}
+          <Box sx={{ flex: 1, minHeight: 0, display: "flex" }}>
+            {/* Chat list sidebar (tablet and up) */}
+            <Box
+              sx={{
+                display: { xs: "none", sm: "block" },
+                width: { sm: 300, md: 320 },
+                flexShrink: 0,
+                borderRight: "1px solid",
+                borderColor: "divider",
+                minHeight: 0,
+              }}
+            >
+              <ChatList {...chatListProps} />
+            </Box>
 
-        {/* Main Grid Layout */}
-        <Grid container sx={{ minHeight: "calc(100vh - 4rem)" }}>
-          {/* Chat List - Sidebar for Small and Larger Screens */}
-          <Grid
-            item
-            sm={4}
-            md={3}
-            sx={{ display: { xs: "none", sm: "block" }, height: "100%" }}
-          >
-            {isLoading ? (
-              <Skeleton />
-            ) : (
-              <ChatList
-                chats={data?.chats}
-                chatId={chatId}
-                handleDeleteChat={handleDeleteChat}
-                newMessagesAlert={newMessagesAlert}
-                onlineUsers={onlineUsers}
-              />
-            )}
-          </Grid>
+            {/* Main content */}
+            <Box sx={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              {/* On phones, the home screen is the chat list itself */}
+              {listOnMobile && (
+                <Box sx={{ display: { xs: "block", sm: "none" }, height: "100%" }}>
+                  <ChatList {...chatListProps} />
+                </Box>
+              )}
+              <Box sx={{ display: { xs: listOnMobile ? "none" : "flex", sm: "flex" }, flexDirection: "column", height: "100%", minHeight: 0 }}>
+                <WrappedComponent
+                  {...props}
+                  chatId={chatId}
+                  chat={currentChat}
+                  isOnline={isCurrentChatOnline}
+                />
+              </Box>
+            </Box>
 
-          <Grid
-            item
-            xs={12}
-            sm={8}
-            lg={6}
-            sx={{
-              height: "100%",
-              overflowY: "auto",
-            }}
-          >
-            <WrappedComponent {...props} chatId={chatId} />
-          </Grid>
+          </Box>
+        </Box>
 
-          {/* Profile Section */}
-          <Grid
-            item
-            md={4}
-            lg={3}
-            height={"109vh"}
-            sx={{
-              display: { xs: "none", md: "block" },
-              padding: "2rem",
-              bgcolor: "rgba(0, 0, 0, 0.85)",
-              height: "100%",
-              overflowY: "auto",
-            }}
-          >
-            <Profile user={user} />
-          </Grid>
-        </Grid>
+        {/* Mobile drawer for chat list */}
+        <Drawer
+          open={isMobileMenu}
+          onClose={handleMobileClose}
+          PaperProps={{ sx: { width: "85vw", maxWidth: 360 } }}
+        >
+          <ChatList {...chatListProps} onSelect={handleMobileClose} />
+        </Drawer>
 
         <DeleteChatMenu
           dispatch={dispatch}

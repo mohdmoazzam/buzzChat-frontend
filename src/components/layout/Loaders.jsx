@@ -1,5 +1,85 @@
-import { Grid, Skeleton, Stack } from "@mui/material"
-import { BouncingSkeleton } from "../styles/StyledComponent";
+import { keyframes } from "@emotion/react";
+import { ChatBubbleRounded as ChatIcon } from "@mui/icons-material";
+import { Box, Grid, Skeleton, Stack, Typography } from "@mui/material"
+import { orange } from "../../constants/color";
+
+const pulse = keyframes`
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(234, 112, 112, 0.45); }
+  50% { transform: scale(1.06); box-shadow: 0 0 0 18px rgba(234, 112, 112, 0); }
+`;
+
+const dotBounce = keyframes`
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-6px); opacity: 1; }
+`;
+
+const fadeIn = keyframes`
+  from { opacity: 0; }
+  to { opacity: 1; }
+`;
+
+const Dots = ({ color = orange, size = 8 }) => (
+    <Stack direction="row" spacing={`${size * 0.75}px`} alignItems="center" aria-hidden>
+        {[0, 1, 2].map((i) => (
+            <Box
+                key={i}
+                sx={{
+                    width: size,
+                    height: size,
+                    borderRadius: "50%",
+                    bgcolor: color,
+                    animation: `${dotBounce} 1.2s ease-in-out infinite`,
+                    animationDelay: `${i * 0.15}s`,
+                }}
+            />
+        ))}
+    </Stack>
+);
+
+// Full-screen branded loader for app start-up and lazy page loads
+const AppLoader = () => (
+    <Box
+        role="status"
+        aria-label="Loading"
+        sx={{
+            minHeight: "100vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 3,
+            bgcolor: "#f6f6f8",
+            // Delay showing so fast loads don't flash
+            animation: `${fadeIn} 0.3s ease 0.15s both`,
+        }}
+    >
+        <Box
+            sx={{
+                width: 72,
+                height: 72,
+                borderRadius: "20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "white",
+                background: `linear-gradient(145deg, ${orange} 0%, #c94f7c 100%)`,
+                animation: `${pulse} 1.8s ease-in-out infinite`,
+            }}
+        >
+            <ChatIcon sx={{ fontSize: 36 }} />
+        </Box>
+        <Typography variant="h6" fontWeight={700} color="#2b2b2b">BuzzChat</Typography>
+        <Dots />
+    </Box>
+);
+
+// Compact loader for inside buttons
+const ButtonLoader = ({ label }) => (
+    <Stack direction="row" alignItems="center" spacing={1.5}>
+        <span>{label}</span>
+        <Dots color="currentColor" size={6} />
+    </Stack>
+);
 
 const LayoutLoader = () => {
     return (
@@ -25,17 +105,22 @@ const LayoutLoader = () => {
     )
 }
 
-const TypingLoader = () => {
-    return <Stack
-        spacing={"0.5rem"}
-        direction={"row"}
-        padding={"0.5rem"}
-        justifyContent={"center"}
+const TypingLoader = () => (
+    <Box
+        role="status"
+        aria-label="Typing"
+        sx={{
+            alignSelf: "flex-start",
+            bgcolor: "#fff",
+            borderRadius: "18px",
+            borderBottomLeftRadius: "6px",
+            px: 2,
+            py: 1.5,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+        }}
     >
-        <BouncingSkeleton variant="circular" width={10} height={10} sx={{animationDelay: "0.1s"}}/>
-        <BouncingSkeleton variant="circular" width={10} height={10} sx={{animationDelay: "0.2s"}}/>
-        <BouncingSkeleton variant="circular" width={10} height={10} sx={{animationDelay: "0.4s"}}/>
-    </Stack>
-};
+        <Dots color="#a1a1aa" size={7} />
+    </Box>
+);
 
-export { TypingLoader, LayoutLoader };
+export { TypingLoader, LayoutLoader, AppLoader, ButtonLoader };

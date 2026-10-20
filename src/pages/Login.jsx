@@ -14,7 +14,6 @@ import {
   Avatar,
   Box,
   Button,
-  CircularProgress,
   IconButton,
   InputAdornment,
   Stack,
@@ -26,6 +25,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
+import { ButtonLoader } from '../components/layout/Loaders';
 import { VisuallyHiddenInput } from '../components/styles/StyledComponent';
 import { orange } from "../constants/color";
 import { server } from "../constants/config";
@@ -74,7 +74,6 @@ const Login = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    const toastId = toast.loading("Logging In...");
     setIsLoading(true);
     try {
       const { data } = await axios.post(`${server}/api/v1/user/login`, {
@@ -86,9 +85,9 @@ const Login = () => {
       });
       dispatch(userExists(data.user));
       dispatch(setToken(data));
-      toast.success(data.message, { id: toastId });
+      toast.success(data.message);
     } catch (ex) {
-      toast.error(ex?.response?.data?.message || "Something went wrong", { id: toastId });
+      toast.error(ex?.response?.data?.message || "Something went wrong");
     } finally {
       setIsLoading(false);
     }
@@ -102,7 +101,6 @@ const Login = () => {
     }
     if (username.error) return toast.error(username.error);
 
-    const toastId = toast.loading("Creating your account...");
     setIsLoading(true);
     const formData = new FormData();
     formData.append("avatar", avatar.file);
@@ -117,9 +115,9 @@ const Login = () => {
       });
       dispatch(userExists(data.user));
       dispatch(setToken(data));
-      toast.success(data.message, { id: toastId });
+      toast.success(data.message);
     } catch (ex) {
-      toast.error(ex?.response?.data?.message || "Something went wrong", { id: toastId });
+      toast.error(ex?.response?.data?.message || "Something went wrong");
     } finally {
       setIsLoading(false);
     }
@@ -173,7 +171,7 @@ const Login = () => {
     />
   );
 
-  const submitButton = (label) => (
+  const submitButton = (label, loadingLabel) => (
     <Button
       type="submit"
       variant="contained"
@@ -188,9 +186,10 @@ const Login = () => {
         fontWeight: 600,
         bgcolor: orange,
         "&:hover": { bgcolor: accentDark },
+        "&.Mui-disabled": { bgcolor: orange, color: "white", opacity: 0.85 },
       }}
     >
-      {isLoading ? <CircularProgress size={24} sx={{ color: "white" }} /> : label}
+      {isLoading ? <ButtonLoader label={loadingLabel} /> : label}
     </Button>
   );
 
@@ -271,7 +270,7 @@ const Login = () => {
                   <Stack spacing={2}>
                     {usernameField}
                     {passwordField}
-                    {submitButton("Log in")}
+                    {submitButton("Log in", "Logging in")}
                   </Stack>
                 </form>
               ) : (
@@ -341,7 +340,7 @@ const Login = () => {
                       InputProps={{ startAdornment: iconAdornment(NotesIcon) }}
                     />
                     {passwordField}
-                    {submitButton("Create account")}
+                    {submitButton("Create account", "Creating account")}
                   </Stack>
                 </form>
               )}

@@ -160,6 +160,23 @@ const api = createApi({
             }),
             invalidatesTags: ["Chat"]
         }),
+
+        checkUsername: builder.query({
+            query: (username) => ({
+                url: `user/check-username?username=${encodeURIComponent(username)}`,
+                credentials: "include"
+            }),
+            keepUnusedDataFor: 0,
+        }),
+
+        updateProfile: builder.mutation({
+            query: (data) => ({
+                url: "user/me",
+                method: "PUT",
+                credentials: "include",
+                body: data
+            }),
+        }),
     })
 });
 
@@ -181,5 +198,7 @@ export const {
     useRemoveGroupMemberMutation,
     useAddGroupMembersMutation,
     useDeleteChatMutation,
-    useLeaveGroupMutation
+    useLeaveGroupMutation,
+    useUpdateProfileMutation,
+    useLazyCheckUsernameQuery
 } = api;
