@@ -1,4 +1,6 @@
 import {
+  ChatBubbleOutlineRounded as ChatIcon,
+  CheckCircleRounded as FriendIcon,
   CheckRounded as CheckIcon,
   CloseRounded as CloseIcon,
   PersonAddAlt1Rounded as AddIcon,
@@ -23,6 +25,7 @@ import {
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
 import { transformImage } from "../../lib/features";
 import { useLazySearchUserQuery, useSendFriendRequestMutation } from "../../redux/api/api";
@@ -33,6 +36,7 @@ const PAGE_SIZE = 20;
 const Search = () => {
   const { isSearch } = useSelector((state) => state.misc);
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
@@ -120,6 +124,13 @@ const Search = () => {
     }
   };
 
+  // Friends: jump straight to the existing conversation
+  const openChat = (chatId) => {
+    if (!chatId) return;
+    closeHandler();
+    navigate(`/chat/${chatId}`);
+  };
+
   const openNotifications = () => {
     closeHandler();
     dispatch(setIsNotification(true));
@@ -180,7 +191,7 @@ const Search = () => {
       <Box ref={resultsRef} className="custom-scrollbar" sx={{ flex: 1, overflowY: "auto", px: 1.5, pt: 1.5, pb: 2 }}>
         {!isSearching && users.length > 0 && (
           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ px: 1, display: "block", mb: 0.5, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {query.trim() ? `${pagination?.total ?? users.length} result${(pagination?.total ?? users.length) === 1 ? "" : "s"}` : "People you may know"}
+            {query.trim() ? `${pagination?.total ?? users.length} result${(pagination?.total ?? users.length) === 1 ? "" : "s"}` : "People"}
           </Typography>
         )}
 
@@ -203,10 +214,10 @@ const Search = () => {
               <EmptyIcon sx={{ color: "text.disabled" }} />
             </Box>
             <Typography fontWeight={600}>
-              {query.trim() ? "No one found" : "No new people yet"}
+              {query.trim() ? "No one found" : "No one else is here yet"}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {query.trim() ? `We couldn't find anyone matching "${query.trim()}".` : "Everyone here is already your friend."}
+              {query.trim() ? `We couldn't find anyone matching "${query.trim()}".` : "Invite friends to join BuzzChat, then find them here."}
             </Typography>
           </Stack>
         ) : (
@@ -218,6 +229,7 @@ const Search = () => {
                 isPending={pendingIds.includes(user._id)}
                 onAdd={() => addFriendHandler(user)}
                 onRespond={openNotifications}
+                onMessage={() => openChat(user.chatId)}
               />
             ))}
           </Stack>
@@ -234,11 +246,23 @@ const Search = () => {
   );
 };
 
-const PersonRow = ({ user, isPending, onAdd, onRespond }) => {
+const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage }) => {
   const { name, username, avatar, requestStatus } = user;
 
   let action;
-  if (requestStatus === "sent") {
+  if (requestStatus === "friend") {
+    action = (
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onMessage}
+        startIcon={<ChatIcon sx={{ fontSize: "16px !important" }} />}
+        sx={{ borderRadius: "999px", px: 1.5, borderColor: "#e4e4e7", color: "text.primary", "&:hover": { borderColor: "#d4d4d8", bgcolor: "#fafafa" } }}
+      >
+        Message
+      </Button>
+    );
+  } else if (requestStatus === "sent") {
     action = (
       <Button
         size="small"
@@ -280,9 +304,19 @@ const PersonRow = ({ user, isPending, onAdd, onRespond }) => {
       <Avatar src={transformImage(avatar)} sx={{ width: 44, height: 44 }} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography fontWeight={600} noWrap>{name}</Typography>
-        <Typography variant="body2" color="text.secondary" noWrap>
-          {requestStatus === "received" ? "Sent you a request" : username ? `@${username}` : ""}
-        </Typography>
+        {requestStatus === "friend" ? (
+          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
+            <FriendIcon sx={{ fontSize: 15, color: "#16a34a", flexShrink: 0 }} />
+            <Typography variant="body2" sx={{ color: "#16a34a", fontWeight: 600, flexShrink: 0 }}>Friends</Typography>
+            {username && (
+              <Typography variant="body2" color="text.secondary" noWrap>· @{username}</Typography>
+            )}
+          </Stack>
+        ) : (
+          <Typography variant="body2" color="text.secondary" noWrap>
+            {requestStatus === "received" ? "Sent you a request" : requestStatus === "sent" ? "Request sent · waiting for reply" : username ? `@${username}` : ""}
+          </Typography>
+        )}
       </Box>
       {action}
     </Stack>
