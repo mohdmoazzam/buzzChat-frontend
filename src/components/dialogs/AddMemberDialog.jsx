@@ -22,7 +22,7 @@ import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import { orange } from '../../constants/color';
-import { transformImage } from '../../lib/features';
+import { fullName, transformImage } from '../../lib/features';
 import { useAddGroupMembersMutation, useAvailableFriendsQuery } from '../../redux/api/api';
 import { setIsAddMember } from '../../redux/reducers/misc';
 import { ButtonLoader } from '../layout/Loaders';
@@ -44,7 +44,7 @@ const AddMemberDialog = ({ chatId, currentCount = 0 }) => {
     const friends = data?.data ?? [];
     const filteredFriends = useMemo(() => {
         const q = filter.trim().toLowerCase();
-        return q ? friends.filter((f) => f.name?.toLowerCase().includes(q)) : friends;
+        return q ? friends.filter((f) => fullName(f).toLowerCase().includes(q)) : friends;
     }, [friends, filter]);
     const slotsLeft = Math.max(0, MAX_MEMBERS - currentCount - selectedIds.length);
 
@@ -140,15 +140,15 @@ const AddMemberDialog = ({ chatId, currentCount = 0 }) => {
                 ) : (
                     <Stack divider={<Divider sx={{ ml: "64px", mr: 1 }} />}>
                         {filteredFriends.map((friend) => {
-                            const selected = selectedIds.includes(friend._id);
+                            const selected = selectedIds.includes(friend.id);
                             return (
                                 <Box
-                                    key={friend._id}
+                                    key={friend.id}
                                     component="button"
                                     type="button"
                                     role="checkbox"
                                     aria-checked={selected}
-                                    onClick={() => toggle(friend._id)}
+                                    onClick={() => toggle(friend.id)}
                                     sx={{
                                         all: "unset",
                                         boxSizing: "border-box",
@@ -164,8 +164,8 @@ const AddMemberDialog = ({ chatId, currentCount = 0 }) => {
                                         "&:focus-visible": { outline: `2px solid ${orange}`, outlineOffset: -2 },
                                     }}
                                 >
-                                    <Avatar src={transformImage(friend.avatar)} sx={{ width: 40, height: 40 }} />
-                                    <Typography fontWeight={selected ? 600 : 500} sx={{ flex: 1, minWidth: 0 }} noWrap>{friend.name}</Typography>
+                                    <Avatar src={transformImage(friend.avatar?.url)} sx={{ width: 40, height: 40 }} />
+                                    <Typography fontWeight={selected ? 600 : 500} sx={{ flex: 1, minWidth: 0 }} noWrap>{fullName(friend)}</Typography>
                                     <Box
                                         sx={{
                                             width: 22, height: 22, borderRadius: "50%", border: "2px solid",

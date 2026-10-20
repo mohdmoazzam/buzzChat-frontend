@@ -11,7 +11,7 @@ const adminLogin = createAsyncThunk("admin/login", async (secretKey) => {
             }
         };
     
-        const { data } = await axios.post(`${server}/api/v1/admin/verify`, { secretKey }, config);
+        const { data } = await axios.post(`${server}/api/v1/admin/verify`, { secret_key: secretKey }, config);
         return data;
     } catch (err) {
         throw err.response?.data?.message;

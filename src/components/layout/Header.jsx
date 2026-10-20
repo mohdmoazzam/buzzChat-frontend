@@ -30,7 +30,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
 import { server } from "../../constants/config";
 import { brandGradient } from "../../constants/theme";
-import { transformImage } from "../../lib/features";
+import { fullName, transformImage } from "../../lib/features";
 import { userNotExists } from "../../redux/reducers/auth";
 import { resetNotification } from "../../redux/reducers/chat";
 import {
@@ -171,7 +171,7 @@ const Header = () => {
         slotProps={{ paper: { sx: { mt: 1, minWidth: 220, borderRadius: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.08)" } } }}
       >
         <Box sx={{ px: 2, py: 1.25 }}>
-          <Typography fontWeight={600} noWrap>{user?.name}</Typography>
+          <Typography fontWeight={600} noWrap>{fullName(user)}</Typography>
           <Typography variant="body2" color="text.secondary" noWrap>@{user?.username}</Typography>
         </Box>
         <Divider />

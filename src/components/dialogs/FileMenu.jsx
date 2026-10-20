@@ -8,7 +8,7 @@ import { Box, Popover, Stack, Typography } from '@mui/material';
 import React, { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
-import { useSendAttachmentsMutation } from '../../redux/api/api';
+import { useSendAttachmentsMutation, useUploadAssetsMutation } from '../../redux/api/api';
 import { setIsFileMenu, setUploadingLoader } from '../../redux/reducers/misc';
 
 const MAX_FILES = 5;
@@ -26,6 +26,7 @@ const FileMenu = ({ anchorE1, chatId }) => {
   const { isFileMenu } = useSelector((state) => state.misc);
   const inputRefs = useRef({});
 
+  const [uploadAssets] = useUploadAssetsMutation();
   const [sendAttachments] = useSendAttachmentsMutation();
 
   const closeFileMenu = () => dispatch(setIsFileMenu(false));
@@ -57,10 +58,15 @@ const FileMenu = ({ anchorE1, chatId }) => {
     const noun = option.noun[files.length === 1 ? 0 : 1];
 
     try {
-      const formData = new FormData();
-      formData.append("chatId", chatId);
-      files.forEach((file) => formData.append("files", file));
-      const response = await sendAttachments(formData);
+      const uploaded = await uploadAssets(files);
+      if (!uploaded.data) {
+        toast.error(uploaded.error?.data?.message || `Couldn't upload ${noun}`);
+        return;
+      }
+      const response = await sendAttachments({
+        chat_id: chatId,
+        attachment_ids: uploaded.data.assets.map((asset) => asset.id),
+      });
       if (!response.data) {
         toast.error(response.error?.data?.message || `Couldn't send ${noun}`);
       }

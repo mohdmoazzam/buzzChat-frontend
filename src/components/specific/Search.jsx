@@ -27,7 +27,7 @@ import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
-import { transformImage } from "../../lib/features";
+import { fullName, transformImage } from "../../lib/features";
 import { useLazySearchUserQuery, useSendFriendRequestMutation } from "../../redux/api/api";
 import { setIsNotification, setIsSearch } from "../../redux/reducers/misc";
 
@@ -74,7 +74,7 @@ const Search = () => {
     return () => clearTimeout(timer);
   }, [query, searchUser]);
 
-  const hasMore = Boolean(pagination?.hasMore);
+  const hasMore = Boolean(pagination?.has_more);
 
   // Next page for the same search, appended to the list
   const loadMore = useCallback(async () => {
@@ -86,8 +86,8 @@ const Search = () => {
       const { data } = await searchUser({ search: query.trim(), page: nextPage, take: PAGE_SIZE });
       if (searchId !== latestSearch.current || !data) return;
       setUsers((list) => {
-        const seen = new Set(list.map((u) => u._id));
-        return [...list, ...data.data.filter((u) => !seen.has(u._id))];
+        const seen = new Set(list.map((u) => u.id));
+        return [...list, ...data.data.filter((u) => !seen.has(u.id))];
       });
       setPagination(data.pagination);
       setPage(nextPage);
@@ -109,17 +109,17 @@ const Search = () => {
   }, [hasMore, loadMore]);
 
   const addFriendHandler = async (user) => {
-    setPendingIds((ids) => [...ids, user._id]);
-    const response = await sendFriendRequest({ userId: user._id });
-    setPendingIds((ids) => ids.filter((id) => id !== user._id));
+    setPendingIds((ids) => [...ids, user.id]);
+    const response = await sendFriendRequest({ user_id: user.id });
+    setPendingIds((ids) => ids.filter((id) => id !== user.id));
 
     if (response.data) {
-      toast.success(`Request sent to ${user.name}`);
-      setUsers((list) => list.map((u) => (u._id === user._id ? { ...u, requestStatus: "sent" } : u)));
+      toast.success(`Request sent to ${fullName(user)}`);
+      setUsers((list) => list.map((u) => (u.id === user.id ? { ...u, request_status: "sent" } : u)));
     } else {
       toast.error(response.error?.data?.message || "Couldn't send request");
       if (response.error?.status === 409) {
-        setUsers((list) => list.map((u) => (u._id === user._id ? { ...u, requestStatus: "sent" } : u)));
+        setUsers((list) => list.map((u) => (u.id === user.id ? { ...u, request_status: "sent" } : u)));
       }
     }
   };
@@ -224,12 +224,12 @@ const Search = () => {
           <Stack divider={<Divider sx={{ ml: "68px", mr: 1 }} />}>
             {users.map((user) => (
               <PersonRow
-                key={user._id}
+                key={user.id}
                 user={user}
-                isPending={pendingIds.includes(user._id)}
+                isPending={pendingIds.includes(user.id)}
                 onAdd={() => addFriendHandler(user)}
                 onRespond={openNotifications}
-                onMessage={() => openChat(user.chatId)}
+                onMessage={() => openChat(user.chat_id)}
               />
             ))}
           </Stack>
@@ -247,7 +247,7 @@ const Search = () => {
 };
 
 const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage }) => {
-  const { name, username, avatar, requestStatus } = user;
+  const { username, avatar, request_status: requestStatus } = user;
 
   let action;
   if (requestStatus === "friend") {
@@ -301,9 +301,9 @@ const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage }) => {
       spacing={1.5}
       sx={{ px: 1, py: 1.1, borderRadius: "12px", transition: "background-color 0.15s", "&:hover": { bgcolor: "#f8f8fa" } }}
     >
-      <Avatar src={transformImage(avatar)} sx={{ width: 44, height: 44 }} />
+      <Avatar src={transformImage(avatar?.url)} sx={{ width: 44, height: 44 }} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography fontWeight={600} noWrap>{name}</Typography>
+        <Typography fontWeight={600} noWrap>{fullName(user)}</Typography>
         {requestStatus === "friend" ? (
           <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
             <FriendIcon sx={{ fontSize: 15, color: "#16a34a", flexShrink: 0 }} />

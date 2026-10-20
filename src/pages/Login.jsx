@@ -9,6 +9,7 @@ import {
   AlternateEmail as AtIcon,
   BadgeOutlined as BadgeIcon,
   NotesOutlined as NotesIcon,
+  MailOutline as MailIcon,
 } from "@mui/icons-material";
 import {
   Avatar,
@@ -61,7 +62,9 @@ const Login = () => {
 
   const dispatch = useDispatch();
 
-  const name = useInputValidation("");
+  const email = useInputValidation("");
+  const firstName = useInputValidation("");
+  const lastName = useInputValidation("");
   const bio = useInputValidation("");
   const username = useInputValidation("", usernameValidator);
   const password = useInputValidation("");
@@ -103,16 +106,23 @@ const Login = () => {
     if (username.error) return toast.error(username.error);
 
     setIsLoading(true);
-    const formData = new FormData();
-    formData.append("avatar", avatar.file);
-    formData.append("name", name.value);
-    formData.append("bio", bio.value);
-    formData.append("password", password.value);
-    formData.append("username", username.value);
     try {
-      const { data } = await axios.post(`${server}/api/v1/user/register`, formData, {
+      // Upload the photo first (no account yet, so this works logged out), then register with its id
+      const files = new FormData();
+      files.append("files", avatar.file);
+      const { data: uploaded } = await axios.post(`${server}/api/v1/assets`, files, { withCredentials: true });
+
+      const { data } = await axios.post(`${server}/api/v1/user/register`, {
+        email: email.value,
+        first_name: firstName.value,
+        last_name: lastName.value,
+        username: username.value,
+        bio: bio.value,
+        password: password.value,
+        avatar_id: uploaded.assets[0].id,
+      }, {
         withCredentials: true,
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "application/json" }
       });
       dispatch(userExists(data.user));
       dispatch(setToken(data));
@@ -338,15 +348,39 @@ const Login = () => {
                       </Typography>
                     </Stack>
 
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <TextField
+                        required
+                        fullWidth
+                        label="First name"
+                        autoComplete="given-name"
+                        value={firstName.value}
+                        onChange={firstName.changeHandler}
+                        sx={fieldSx}
+                        inputProps={{ maxLength: 50 }}
+                        InputProps={{ startAdornment: iconAdornment(BadgeIcon) }}
+                      />
+                      <TextField
+                        fullWidth
+                        label="Last name"
+                        autoComplete="family-name"
+                        value={lastName.value}
+                        onChange={lastName.changeHandler}
+                        sx={fieldSx}
+                        inputProps={{ maxLength: 50 }}
+                      />
+                    </Stack>
                     <TextField
                       required
                       fullWidth
-                      label="Full name"
-                      autoComplete="name"
-                      value={name.value}
-                      onChange={name.changeHandler}
+                      type="email"
+                      label="Email"
+                      autoComplete="email"
+                      value={email.value}
+                      onChange={email.changeHandler}
                       sx={fieldSx}
-                      InputProps={{ startAdornment: iconAdornment(BadgeIcon) }}
+                      inputProps={{ maxLength: 254 }}
+                      InputProps={{ startAdornment: iconAdornment(MailIcon) }}
                     />
                     {usernameField}
                     <TextField

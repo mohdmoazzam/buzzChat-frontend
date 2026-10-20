@@ -37,13 +37,14 @@ import Title from '../components/shared/Title';
 import { VisuallyHiddenInput } from '../components/styles/StyledComponent';
 import { orange } from '../constants/color';
 import { useErrors } from '../hooks/hook';
-import { transformImage } from '../lib/features';
+import { fullName, transformImage } from '../lib/features';
 import {
   useDeleteChatMutation,
   useGetChatDetailsQuery,
   useMyGroupsQuery,
   useRemoveGroupMemberMutation,
   useRenameGroupMutation,
+  useUploadAssetsMutation,
 } from '../redux/api/api';
 import { setIsAddMember, setIsNewGroup } from '../redux/reducers/misc';
 
@@ -119,10 +120,10 @@ const GroupsList = () => {
           <Stack divider={<Divider sx={{ ml: "72px" }} />}>
             {groups.map((group) => (
               <Box
-                key={group._id}
+                key={group.id}
                 component="button"
                 type="button"
-                onClick={() => navigate(`/groups?group=${group._id}`)}
+                onClick={() => navigate(`/groups?group=${group.id}`)}
                 sx={{
                   all: "unset",
                   boxSizing: "border-box",
@@ -142,11 +143,11 @@ const GroupsList = () => {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography fontWeight={600} noWrap>{group.name}</Typography>
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    {group.description || `${group.memberCount ?? ""} members`}
+                    {group.description || `${group.member_count ?? ""} members`}
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
-                  {group.memberCount} members
+                  {group.member_count} members
                 </Typography>
                 <ChevronIcon sx={{ color: "text.disabled" }} />
               </Box>
@@ -167,7 +168,9 @@ const GroupDetails = ({ chatId }) => {
   const { isAddMember } = useSelector((state) => state.misc);
 
   const groupDetails = useGetChatDetailsQuery({ chatId, populate: true }, { skip: !chatId });
-  const [updateGroup, { isLoading: isUpdating }] = useRenameGroupMutation();
+  const [updateGroup, { isLoading: isSaving }] = useRenameGroupMutation();
+  const [uploadAssets, { isLoading: isUploading }] = useUploadAssetsMutation();
+  const isUpdating = isSaving || isUploading;
   const [removeMember, { isLoading: isRemoving }] = useRemoveGroupMemberMutation();
   const [deleteGroup, { isLoading: isDeleting }] = useDeleteChatMutation();
 
@@ -175,7 +178,7 @@ const GroupDetails = ({ chatId }) => {
 
   const chat = groupDetails.data?.chat;
   const members = chat?.members ?? [];
-  const isCreator = chat?.creator?.toString() === user?._id?.toString();
+  const isCreator = !!user?.id && chat?.creator_id === user.id;
 
   const [editing, setEditing] = useState(null); // "name" | "description" | null
   const [draft, setDraft] = useState("");
@@ -191,9 +194,7 @@ const GroupDetails = ({ chatId }) => {
   }, [groupDetails.isError, navigate]);
 
   const save = async (fields, successMessage) => {
-    const formData = new FormData();
-    Object.entries(fields).forEach(([key, value]) => formData.append(key, value));
-    const response = await updateGroup({ chatId, formData });
+    const response = await updateGroup({ chatId, ...fields });
     if (response.data) {
       toast.success(successMessage);
       setEditing(null);
@@ -224,12 +225,15 @@ const GroupDetails = ({ chatId }) => {
     if (!file) return;
     if (!file.type.startsWith("image/")) return toast.error("Please choose an image file");
     if (file.size > 5 * 1024 * 1024) return toast.error("Image must be under 5MB");
-    save({ avatar: file }, "Group picture updated");
+    uploadAssets([file]).then((uploaded) => {
+      if (!uploaded.data) return toast.error(uploaded.error?.data?.message || "Couldn't upload the picture");
+      save({ avatar_id: uploaded.data.assets[0].id }, "Group picture updated");
+    });
   };
 
   const confirmRemove = async () => {
-    const response = await removeMember({ chatId, userId: memberToRemove._id });
-    if (response.data) toast.success(`${memberToRemove.name} removed`);
+    const response = await removeMember({ chatId, userId: memberToRemove.id });
+    if (response.data) toast.success(`${fullName(memberToRemove)} removed`);
     else toast.error(response.error?.data?.message || "Couldn't remove member");
     setMemberToRemove(null);
   };
@@ -280,7 +284,7 @@ const GroupDetails = ({ chatId }) => {
               aria-label={isCreator ? "Change group picture" : undefined}
               sx={{ position: "relative", borderRadius: "50%", cursor: isCreator ? "pointer" : "default", "&:hover .overlay": { opacity: isCreator ? 1 : 0 } }}
             >
-              {chat.avatar?.url ? (
+              {chat.avatar ? (
                 <Avatar src={transformImage(chat.avatar.url, 240)} sx={{ width: 104, height: 104 }} />
               ) : (
                 <Avatar sx={{ width: 104, height: 104, bgcolor: "#f4f4f6", color: "text.disabled" }}>
@@ -393,14 +397,14 @@ const GroupDetails = ({ chatId }) => {
 
           <Stack divider={<Divider sx={{ ml: "60px" }} />}>
             {members.map((member) => {
-              const isMe = member._id?.toString() === user?._id?.toString();
-              const isAdmin = member._id?.toString() === chat.creator?.toString();
+              const isMe = member.id === user?.id;
+              const isAdmin = member.id === chat.creator_id;
               return (
-                <Stack key={member._id} direction="row" alignItems="center" spacing={1.5} sx={{ py: 1.25 }}>
-                  <Avatar src={transformImage(member.avatar)} sx={{ width: 44, height: 44 }} />
+                <Stack key={member.id} direction="row" alignItems="center" spacing={1.5} sx={{ py: 1.25 }}>
+                  <Avatar src={transformImage(member.avatar?.url)} sx={{ width: 44, height: 44 }} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography fontWeight={600} noWrap>{isMe ? "You" : member.name}</Typography>
+                      <Typography fontWeight={600} noWrap>{isMe ? "You" : fullName(member)}</Typography>
                       {isAdmin && (
                         <Box component="span" sx={{ fontSize: "0.7rem", fontWeight: 700, color: "#c74e4e", bgcolor: "rgba(234,112,112,0.12)", px: 0.75, py: 0.25, borderRadius: "6px" }}>
                           Admin
@@ -412,12 +416,12 @@ const GroupDetails = ({ chatId }) => {
                     )}
                   </Box>
                   {isCreator && !isMe && (
-                    <Tooltip title={canRemove ? `Remove ${member.name}` : `Groups need at least ${MIN_MEMBERS} members`}>
+                    <Tooltip title={canRemove ? `Remove ${fullName(member)}` : `Groups need at least ${MIN_MEMBERS} members`}>
                       <span>
                         <IconButton
                           onClick={() => setMemberToRemove(member)}
                           disabled={!canRemove}
-                          aria-label={`Remove ${member.name}`}
+                          aria-label={`Remove ${fullName(member)}`}
                           sx={{ color: "text.secondary", "&:hover": { color: "error.main", bgcolor: "rgba(211,47,47,0.06)" } }}
                         >
                           <PersonRemoveIcon fontSize="small" />
@@ -472,7 +476,7 @@ const GroupDetails = ({ chatId }) => {
         open={!!memberToRemove}
         handleClose={() => setMemberToRemove(null)}
         deleteHandler={confirmRemove}
-        title={`Remove ${memberToRemove?.name ?? "member"}?`}
+        title={`Remove ${memberToRemove ? fullName(memberToRemove) : "member"}?`}
         message="They'll be removed from the group and won't see new messages."
         confirmLabel="Remove"
         isLoading={isRemoving}

@@ -14,13 +14,12 @@ import MessageComponent from "../components/shared/MessageComponent";
 import AvatarCard from "../components/shared/AvatarCard";
 import { orange } from "../constants/color";
 import { accentDark } from "../constants/theme";
-import { useErrors, useSocketsEvents } from "../hooks/hook";
+import { useErrors, useInfiniteScrollTop, useSocketsEvents } from "../hooks/hook";
 import {
   useGetChatDetailsQuery,
   useGetChatMessagesQuery,
 } from "../redux/api/api";
 import { getSocket } from "../socket";
-import { useInfiniteScrollTop } from "6pp";
 import { setIsFileMenu } from "../redux/reducers/misc";
 import { removeNewMessagesAlert } from "../redux/reducers/chat";
 import { TypingLoader } from "../components/layout/Loaders";
@@ -69,14 +68,14 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const { data: oldMessages, setData: setOldMessages } = useInfiniteScrollTop(
     containerRef,
-    oldMessagesChunk.data?.totalPages,
+    oldMessagesChunk.data?.total_pages,
     page,
     setPage,
     oldMessagesChunk.data?.messages
   );
 
   const members = chatDetails?.data?.chat?.members;
-  const isGroup = chat?.groupChat ?? chatDetails?.data?.chat?.groupChat;
+  const isGroup = chat?.group_chat ?? chatDetails?.data?.chat?.group_chat;
 
   const errors = [
     { isError: chatDetails.isError, error: chatDetails.error },
@@ -97,7 +96,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const stopTyping = () => {
     if (typingTimeout.current) clearTimeout(typingTimeout.current);
     if (iamTyping) {
-      socket.emit("STOP_TYPING", { members, chatId });
+      socket.emit("STOP_TYPING", { chat_id: chatId });
       setIamTyping(false);
     }
   };
@@ -106,7 +105,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
     e?.preventDefault();
     const text = message.trim();
     if (!text) return;
-    socket.emit("NEW_MESSAGE", { chatId, members, message: text });
+    socket.emit("NEW_MESSAGE", { chat_id: chatId, message: text });
     setMessage("");
     stopTyping();
     inputRef.current?.focus();
@@ -121,7 +120,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
   };
 
   useEffect(() => {
-    socket.emit("CHAT_JOINED", { userId: user._id, members });
+    socket.emit("CHAT_JOINED");
     dispatch(removeNewMessagesAlert({ chatId }));
     hasInitialScroll.current = false;
 
@@ -132,7 +131,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
       setPage(1);
       setUserTyping(false);
       setUnseenCount(0);
-      socket.emit("CHAT_LEAVED", { userId: user._id, members });
+      socket.emit("CHAT_LEAVED");
     };
   }, [chatId]);
 
@@ -164,7 +163,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
   useEffect(() => {
     if (messages.length === 0) return;
     const last = messages[messages.length - 1];
-    const mine = last?.sender?._id === user._id;
+    const mine = last?.sender?.id === user.id;
     if (isNearBottom || mine) scrollToBottom();
     else setUnseenCount((n) => n + 1);
   }, [messages]);
@@ -191,21 +190,21 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const messageChangeHandler = (e) => {
     setMessage(e.target.value);
     if (!iamTyping) {
-      socket.emit("START_TYPING", { members, chatId });
+      socket.emit("START_TYPING", { chat_id: chatId });
       setIamTyping(true);
     }
     if (typingTimeout.current) {
       clearTimeout(typingTimeout.current);
     }
     typingTimeout.current = setTimeout(() => {
-      socket.emit("STOP_TYPING", { members, chatId });
+      socket.emit("STOP_TYPING", { chat_id: chatId });
       setIamTyping(false);
     }, 2000);
   };
 
   const newMessagesListener = useCallback(
     (data) => {
-      if (data.chatId !== chatId) return;
+      if (data.chat_id !== chatId) return;
       setMessages((prev) => [...prev, data.message]);
     },
     [chatId]
@@ -213,7 +212,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const startTypingListener = useCallback(
     (data) => {
-      if (data.chatId !== chatId) return;
+      if (data.chat_id !== chatId) return;
       setUserTyping(true);
     },
     [chatId]
@@ -221,25 +220,26 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const stopTypingListener = useCallback(
     (data) => {
-      if (data.chatId !== chatId) return;
+      if (data.chat_id !== chatId) return;
       setUserTyping(false);
     },
     [chatId]
   );
 
   const alertListener = useCallback((data) => {
-    if (data.chatId !== chatId) return;
+    if (data.chat_id !== chatId) return;
 
     const messageForAlert = {
-      _id: `alert-${Date.now()}`,
+      id: `alert-${Date.now()}`,
       system: true,
       content: data.message,
       sender: {
-        _id: "system",
-        name: "BuzzChat",
+        id: "system",
+        first_name: "BuzzChat",
+        last_name: "",
       },
-      chat: chatId,
-      createdAt: new Date().toISOString(),
+      chat_id: chatId,
+      created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, messageForAlert]);
   }, [chatId]);
@@ -271,16 +271,16 @@ const Chat = ({ chatId, chat, isOnline }) => {
       const next = allMessages[index + 1];
       const sameGroup = (a, b) =>
         a && b && !a.system && !b.system &&
-        a.sender?._id === b.sender?._id &&
-        moment(a.createdAt).isSame(b.createdAt, "day") &&
-        Math.abs(new Date(b.createdAt) - new Date(a.createdAt)) < GROUP_WINDOW_MS;
+        a.sender?.id === b.sender?.id &&
+        moment(a.created_at).isSame(b.created_at, "day") &&
+        Math.abs(new Date(b.created_at) - new Date(a.created_at)) < GROUP_WINDOW_MS;
 
-      const newDay = !prev || !moment(prev.createdAt).isSame(msg.createdAt, "day");
+      const newDay = !prev || !moment(prev.created_at).isSame(msg.created_at, "day");
       const isFirst = !sameGroup(prev, msg);
       const isLast = !sameGroup(msg, next);
 
       return (
-        <Fragment key={msg._id ?? index}>
+        <Fragment key={msg.id ?? index}>
           {newDay && (
             <Box sx={{ alignSelf: "center", my: 1.5 }}>
               <Typography
@@ -288,7 +288,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
                 fontWeight={600}
                 sx={{ bgcolor: "rgba(255,255,255,0.92)", backdropFilter: "blur(6px)", color: "text.secondary", px: 1.5, py: 0.5, borderRadius: "999px", boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }}
               >
-                {dayLabel(msg.createdAt)}
+                {dayLabel(msg.created_at)}
               </Typography>
             </Box>
           )}

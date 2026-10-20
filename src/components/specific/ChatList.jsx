@@ -90,10 +90,10 @@ const ChatList = ({
         ) : visibleChats.length > 0 ? (
           <Stack spacing={0.5}>
             {visibleChats.map((chat) => {
-              const { _id, name, groupChat, avatar, members, lastMessage } = chat;
+              const { id, name, group_chat, avatar, members, last_message } = chat;
 
               const newMessageAlert = newMessagesAlert?.find(
-                ({ chatId }) => chatId === _id
+                ({ chatId }) => chatId === id
               );
 
               const isOnline = members?.some((member) =>
@@ -102,15 +102,15 @@ const ChatList = ({
 
               return (
                 <ChatItem
-                  key={_id}
+                  key={id}
                   newMessageAlert={newMessageAlert}
                   isOnline={isOnline}
                   avatar={avatar}
                   name={name}
-                  _id={_id}
-                  groupChat={groupChat}
-                  lastMessage={lastMessage}
-                  sameSender={chatId === _id}
+                  id={id}
+                  groupChat={group_chat}
+                  lastMessage={last_message}
+                  sameSender={chatId === id}
                   handleDeleteChat={handleDeleteChat}
                   onSelect={onSelect}
                 />

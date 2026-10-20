@@ -7,7 +7,7 @@ import AdminLayout from '../../components/layout/AdminLayout';
 import RenderAttachment from "../../components/shared/RenderAttachment";
 import Table from '../../components/shared/Table';
 import { server } from '../../constants/config';
-import { fileFormat, transformImage } from '../../lib/features';
+import { fileFormat, fullName, transformImage } from '../../lib/features';
 
 const columns = [
   {
@@ -63,19 +63,19 @@ const columns = [
     )
   },
   {
-    field: "chat",
+    field: "chat_id",
     headerName: "Chat",
     headerClassName: "table-header",
     width: 100
   },
   {
-    field: "groupChat",
+    field: "group_chat",
     headerName: "Group",
     headerClassName: "table-header",
     width: 70
   },
   {
-    field: "createdAt",
+    field: "created_at",
     headerName: "Time",
     headerClassName: "table-header",
     width: 250
@@ -112,15 +112,14 @@ const MessageManagement = () => {
   useEffect(() => {
     setRows(data?.data?.map(i => ({
       ...i,
-      id: i._id,
       sender: {
-        name: i.sender.name,
-        avatar: transformImage(i.sender.avatar, 50)
+        name: fullName(i.sender),
+        avatar: transformImage(i.sender.avatar.url, 50)
       },
-      createdAt: moment(i.createdAt).format("MMMM Do YYYY, h:mm:ss a")
-    }))
+      created_at: moment(i.created_at).format("MMMM Do YYYY, h:mm:ss a")
+    })) ?? []
     )
-  }, [])
+  }, [data])
   return loading ? (
     <Skeleton />
   ) : (

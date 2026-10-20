@@ -5,7 +5,7 @@ import AvatarCard from '../../components/shared/AvatarCard';
 import Table from '../../components/shared/Table';
 import { server } from '../../constants/config';
 import { useFetchData } from '6pp';
-import { transformImage } from '../../lib/features';
+import { fullName, transformImage } from '../../lib/features';
 import { useSelector } from 'react-redux';
 import axios from 'axios';
 
@@ -24,7 +24,7 @@ const columns = [
     width: 150
   },
   {
-    field: "groupChat",
+    field: "group_chat",
     headerName: "Group",
     headerClassName: "table-header",
     width: 100
@@ -39,7 +39,7 @@ const columns = [
     )
   },
   {
-    field: "totalMembers",
+    field: "total_members",
     headerName: "Total Members",
     headerClassName: "table-header",
     width: 120
@@ -54,7 +54,7 @@ const columns = [
     )
   },
   {
-    field: "totalMessages",
+    field: "total_messages",
     headerName: "Total Messages",
     headerClassName: "table-header",
     width: 120
@@ -105,12 +105,11 @@ const ChatManagement = () => {
     if (data) {
       setRows(data?.data?.map((d) => ({
         ...d,
-        id: d._id,
         avatar: d.avatar.map((a) => transformImage(a, 50)),
-        members: d.members.map((m) => transformImage(m.avatar, 50)),
+        members: d.members.map((m) => transformImage(m.avatar.url, 50)),
         creator: {
-          name: d.creator.name,
-          avatar: transformImage(d.creator.avatar, 50)
+          name: fullName(d.creator),
+          avatar: transformImage(d.creator.avatar.url, 50)
         }
       })));
     }

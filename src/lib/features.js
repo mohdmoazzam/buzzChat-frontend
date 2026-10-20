@@ -40,6 +40,10 @@ const getLast7Days = () => {
     return last7Days;
 };
 
+// API people have first_name / last_name; a missing person is a deleted account
+const fullName = (person) =>
+    person ? [person.first_name, person.last_name].filter(Boolean).join(" ") : "Deleted user";
+
 const getOrSaveFromLocalStorage = ({ key, value, get }) => {
     if (get) {
         return localStorage.getItem(key) ? JSON.parse(localStorage.getItem(key)) : null;
@@ -48,4 +52,4 @@ const getOrSaveFromLocalStorage = ({ key, value, get }) => {
     }
 };
 
-export { fileFormat, transformImage, getLast7Days, getOrSaveFromLocalStorage, formatChatTime };
+export { fileFormat, transformImage, getLast7Days, getOrSaveFromLocalStorage, formatChatTime, fullName };

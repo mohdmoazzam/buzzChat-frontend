@@ -2,14 +2,14 @@ import { Box, Typography } from '@mui/material';
 import React, { memo } from 'react';
 import moment from 'moment';
 import { lightBlue, orange } from '../../constants/color';
-import { fileFormat } from '../../lib/features';
+import { fileFormat, fullName } from '../../lib/features';
 import RenderAttachment from './RenderAttachment';
 
 const BIG = "18px";
 const SMALL = "6px";
 
 const MessageComponent = ({ message, user, showSender = false, isFirst = true, isLast = true }) => {
-    const { sender, content, attachments = [], createdAt, system } = message;
+    const { sender, content, attachments = [], created_at, system } = message;
 
     if (system) {
         return (
@@ -25,8 +25,8 @@ const MessageComponent = ({ message, user, showSender = false, isFirst = true, i
         );
     }
 
-    const mine = sender?._id === user?._id;
-    const time = moment(createdAt).format("h:mm A");
+    const mine = !!user?.id && sender?.id === user.id;
+    const time = moment(created_at).format("h:mm A");
     const onlyAttachments = attachments.length > 0 && !content;
 
     // Tight corners where bubbles in the same group touch
@@ -46,7 +46,7 @@ const MessageComponent = ({ message, user, showSender = false, isFirst = true, i
         >
             {showSender && !mine && (
                 <Typography variant="caption" fontWeight={600} sx={{ color: lightBlue, display: "block", ml: 1.5, mb: 0.25 }}>
-                    {sender?.name}
+                    {fullName(sender)}
                 </Typography>
             )}
 

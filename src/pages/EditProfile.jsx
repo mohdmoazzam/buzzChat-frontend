@@ -16,7 +16,7 @@ import Title from "../components/shared/Title";
 import { VisuallyHiddenInput } from "../components/styles/StyledComponent";
 import { orange } from "../constants/color";
 import { transformImage } from "../lib/features";
-import { useLazyCheckUsernameQuery, useUpdateProfileMutation } from "../redux/api/api";
+import { useLazyCheckUsernameQuery, useUpdateProfileMutation, useUploadAssetsMutation } from "../redux/api/api";
 import { userExists } from "../redux/reducers/auth";
 import { USERNAME_REGEX, USERNAME_RULE_MESSAGE } from "../utils/validators";
 
@@ -97,18 +97,21 @@ const EditProfile = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const [name, setName] = useState(user?.name ?? "");
+  const [firstName, setFirstName] = useState(user?.first_name ?? "");
+  const [lastName, setLastName] = useState(user?.last_name ?? "");
   const [bio, setBio] = useState(user?.bio ?? "");
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
-  const [touched, setTouched] = useState({ name: false, bio: false, phone: false });
+  const [touched, setTouched] = useState({ firstName: false, bio: false, phone: false });
   const [username, setUsername] = useState(user?.username ?? "");
   const [gender, setGender] = useState(user?.gender ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   // unchanged | checking | available | taken | invalid | error
   const [usernameStatus, setUsernameStatus] = useState("unchanged");
 
-  const [updateProfile, { isLoading }] = useUpdateProfileMutation();
+  const [updateProfile, { isLoading: isSaving }] = useUpdateProfileMutation();
+  const [uploadAssets, { isLoading: isUploading }] = useUploadAssetsMutation();
+  const isLoading = isSaving || isUploading;
   const [checkUsername] = useLazyCheckUsernameQuery();
   const latestCheck = useRef(0);
 
@@ -134,7 +137,7 @@ const EditProfile = () => {
     return () => clearTimeout(timer);
   }, [username, user?.username, checkUsername]);
 
-  const nameError = !name.trim() ? "Name is required" : "";
+  const nameError = !firstName.trim() ? "First name is required" : "";
   const bioError = !bio.trim() ? "Bio is required" : "";
   const normalizedPhone = normalizePhone(phone);
   const phoneError = normalizedPhone && !PHONE_REGEX.test(normalizedPhone) ? "Enter a valid phone number (7–15 digits)" : "";
@@ -143,7 +146,8 @@ const EditProfile = () => {
   const usernameOk = usernameStatus === "unchanged" || usernameStatus === "available";
   const usernameBad = ["taken", "invalid", "error"].includes(usernameStatus);
   const isDirty =
-    name.trim() !== (user?.name ?? "") ||
+    firstName.trim() !== (user?.first_name ?? "") ||
+    lastName.trim() !== (user?.last_name ?? "") ||
     bio.trim() !== (user?.bio ?? "") ||
     usernameChanged ||
     gender !== (user?.gender ?? "") ||
@@ -167,29 +171,36 @@ const EditProfile = () => {
   };
 
   const discardChanges = () => {
-    setName(user?.name ?? "");
+    setFirstName(user?.first_name ?? "");
+    setLastName(user?.last_name ?? "");
     setBio(user?.bio ?? "");
     setUsername(user?.username ?? "");
     setGender(user?.gender ?? "");
     setPhone(user?.phone ?? "");
-    setTouched({ name: false, bio: false, phone: false });
+    setTouched({ firstName: false, bio: false, phone: false });
     resetAvatar();
   };
 
   const submitHandler = async (e) => {
     e.preventDefault();
-    setTouched({ name: true, bio: true, phone: true });
+    setTouched({ firstName: true, bio: true, phone: true });
     if (!canSave) return;
 
-    const formData = new FormData();
-    if (name.trim() !== user?.name) formData.append("name", name.trim());
-    if (bio.trim() !== user?.bio) formData.append("bio", bio.trim());
-    if (usernameChanged) formData.append("username", username.trim());
-    if (gender !== (user?.gender ?? "")) formData.append("gender", gender);
-    if (phoneChanged) formData.append("phone", normalizedPhone);
-    if (avatarFile) formData.append("avatar", avatarFile);
+    const changes = {};
+    if (firstName.trim() !== user?.first_name) changes.first_name = firstName.trim();
+    if (lastName.trim() !== (user?.last_name ?? "")) changes.last_name = lastName.trim();
+    if (bio.trim() !== user?.bio) changes.bio = bio.trim();
+    if (usernameChanged) changes.username = username.trim();
+    if (gender !== (user?.gender ?? "")) changes.gender = gender;
+    if (phoneChanged) changes.phone = normalizedPhone;
+    // A new photo is uploaded first; the profile then refers to it by id
+    if (avatarFile) {
+      const uploaded = await uploadAssets([avatarFile]);
+      if (!uploaded.data) return toast.error(uploaded.error?.data?.message || "Couldn't upload your photo");
+      changes.avatar_id = uploaded.data.assets[0].id;
+    }
 
-    const response = await updateProfile(formData);
+    const response = await updateProfile(changes);
     if (response.data) {
       dispatch(userExists(response.data.user));
       toast.success("Profile updated");
@@ -200,7 +211,7 @@ const EditProfile = () => {
     }
   };
 
-  const showNameError = touched.name && !!nameError;
+  const showNameError = touched.firstName && !!nameError;
   const showBioError = touched.bio && !!bioError;
   const showPhoneError = touched.phone && !!phoneError;
   const status = usernameStatusUi[usernameStatus];
@@ -315,22 +326,36 @@ const EditProfile = () => {
           </Stack>
 
           <Section title="Basic info" description="Your name and how people find you.">
-            <Field
-              label="Full name"
-              htmlFor="profile-name"
-              helper={showNameError ? nameError : null}
-              helperColor="error.main"
-            >
-              <InputBase
-                id="profile-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                autoComplete="name"
-                placeholder="Your name"
-                sx={fieldSx(showNameError ? "error" : null)}
-              />
-            </Field>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2.5} sx={{ "& > *": { flex: 1, minWidth: 0 } }}>
+              <Field
+                label="First name"
+                htmlFor="profile-first-name"
+                helper={showNameError ? nameError : null}
+                helperColor="error.main"
+              >
+                <InputBase
+                  id="profile-first-name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  onBlur={() => setTouched((t) => ({ ...t, firstName: true }))}
+                  autoComplete="given-name"
+                  placeholder="First name"
+                  inputProps={{ maxLength: 50 }}
+                  sx={fieldSx(showNameError ? "error" : null)}
+                />
+              </Field>
+              <Field label="Last name" htmlFor="profile-last-name" aside={<Typography variant="caption" color="text.disabled">Optional</Typography>}>
+                <InputBase
+                  id="profile-last-name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  autoComplete="family-name"
+                  placeholder="Last name"
+                  inputProps={{ maxLength: 50 }}
+                  sx={fieldSx(null)}
+                />
+              </Field>
+            </Stack>
 
             <Field
               label="Username"

@@ -22,7 +22,7 @@ import Header from "./Header";
 import { APP_MAX_WIDTH } from "../../constants/theme";
 
 // Most recently active chats first
-const CHAT_ORDER_BY = "updatedAt";
+const CHAT_ORDER_BY = "updated_at";
 const CHAT_ORDER = "desc";
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -61,7 +61,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       order: CHAT_ORDER,
       search: debouncedSearch,
     });
-    const hasMoreChats = Boolean(data?.pagination?.hasMore);
+    const hasMoreChats = Boolean(data?.pagination?.has_more);
 
     const loadMoreChats = useCallback(() => {
       if (hasMoreChats && !isFetching) setChatPage((page) => page + 1);
@@ -83,10 +83,10 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       });
     }, [newMessagesAlert]);
 
-    const handleDeleteChat = (e, _id, groupChat) => {
+    const handleDeleteChat = (e, id, groupChat) => {
       e.preventDefault();
       dispatch(setIsDeleteMenu(true));
-      dispatch(setSelectedDeleteChat({ chatId: _id, groupChat: groupChat }));
+      dispatch(setSelectedDeleteChat({ chatId: id, groupChat }));
       deleteMenuAnchor.current = e.currentTarget;
     };
 
@@ -94,8 +94,8 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     const newMessageAlertListener = useCallback(
       (data) => {
-        if (data.chatId === chatId) return;
-        dispatch(setNewMessagesAlert(data));
+        if (data.chat_id === chatId) return;
+        dispatch(setNewMessagesAlert({ chatId: data.chat_id }));
       },
       [chatId]
     );
@@ -109,7 +109,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
     const refetchListener = useCallback(async () => {
       const result = await reloadFirstPage();
       const fresh = result?.data;
-      if (chatId && fresh && !fresh.pagination?.hasMore && !fresh.chats?.some((chat) => chat._id === chatId)) {
+      if (chatId && fresh && !fresh.pagination?.has_more && !fresh.chats?.some((chat) => chat.id === chatId)) {
         navigate("/");
       }
     }, [reloadFirstPage, navigate, chatId]);
@@ -119,20 +119,20 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
     }, []);
 
     // Keep the chat list preview live: update the last message and move the chat to the top
-    const chatPreviewListener = useCallback(({ chatId: messageChatId, message } = {}) => {
+    const chatPreviewListener = useCallback(({ chat_id: messageChatId, message } = {}) => {
       if (!messageChatId || !message) return;
       let found = false;
       dispatch(
         api.util.updateQueryData("myChats", {}, (draft) => {
-          const index = draft?.chats?.findIndex((chat) => chat._id === messageChatId) ?? -1;
+          const index = draft?.chats?.findIndex((chat) => chat.id === messageChatId) ?? -1;
           if (index === -1) return;
           found = true;
           const [chat] = draft.chats.splice(index, 1);
-          chat.lastMessage = {
+          chat.last_message = {
             content: message.content ?? "",
             attachments: (message.attachments ?? []).map(({ url }) => ({ url })),
-            createdAt: message.createdAt,
-            sender: { _id: message.sender?._id, name: message.sender?.name },
+            created_at: message.created_at,
+            sender: message.sender ?? null,
           };
           draft.chats.unshift(chat);
         })
@@ -151,7 +151,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     useSocketsEvents(socket, eventHandler);
 
-    const currentChat = data?.chats?.find((chat) => chat._id === chatId);
+    const currentChat = data?.chats?.find((chat) => chat.id === chatId);
     const isCurrentChatOnline = !!currentChat?.members?.some((member) => onlineUsers?.includes(member));
 
     const listOnMobile = showListOnMobile && !chatId;

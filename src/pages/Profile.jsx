@@ -6,7 +6,7 @@ import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import Title from "../components/shared/Title";
-import { transformImage } from "../lib/features";
+import { fullName, transformImage } from "../lib/features";
 
 // "Prefer not to say" is intentionally not shown publicly
 const GENDER_LABELS = { male: "Male", female: "Female", other: "Other" };
@@ -26,7 +26,7 @@ const Profile = () => {
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="h4" fontWeight={700} fontSize={{ xs: "1.75rem", sm: "2.25rem" }} lineHeight={1.15} sx={{ wordBreak: "break-word" }}>
-              {user?.name}
+              {fullName(user)}
             </Typography>
             <Typography color="text.secondary" fontSize="1.05rem" mt={0.5}>@{user?.username}</Typography>
             <Stack direction="row" alignItems="center" columnGap={2.5} rowGap={0.5} mt={1.5} flexWrap="wrap" color="text.secondary">
@@ -45,7 +45,7 @@ const Profile = () => {
               <Stack direction="row" alignItems="center" spacing={0.75}>
                 <CalendarIcon sx={{ fontSize: 16 }} />
                 <Typography variant="body2">
-                  Joined {user?.createdAt ? moment(user.createdAt).format("MMMM YYYY") : "—"}
+                  Joined {user?.created_at ? moment(user.created_at).format("MMMM YYYY") : "—"}
                 </Typography>
               </Stack>
             </Stack>

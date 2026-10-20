@@ -66,9 +66,9 @@ const Dashboard = () => {
       alignItems={"center"}
       margin={"2rem 0"}
     >
-      <Widget title={"Users"} value={stats?.data?.usersCount} Icon={<PersonIcon />} />
-      <Widget title={"Chats"} value={stats?.data?.totalChatsCount} Icon={<GroupIcon />} />
-      <Widget title={"Messages"} value={stats?.data?.messagesCount} Icon={<Message />} />
+      <Widget title={"Users"} value={stats?.data?.users_count} Icon={<PersonIcon />} />
+      <Widget title={"Chats"} value={stats?.data?.total_chats_count} Icon={<GroupIcon />} />
+      <Widget title={"Messages"} value={stats?.data?.messages_count} Icon={<Message />} />
     </Stack>
   );
 
@@ -89,7 +89,7 @@ const Dashboard = () => {
         >
           <Paper elevation={3} sx={{ padding: "2rem 3.5rem", borderRadius: "1rem", width: "100%", maxWidth: "28rem" }}>
             <Typography margin={"2rem 0"} variant="h4">Last Messages</Typography>
-            <LineChart values={stats?.data?.messagesChart || []} />
+            <LineChart values={stats?.data?.messages_chart || []} />
           </Paper>
           <Paper sx={{
             padding: "1rem",
@@ -104,7 +104,7 @@ const Dashboard = () => {
           }}>
             <DoughnutChart
               labels={["Single chats", "Group chats"]}
-              values={[stats?.data?.totalChatsCount - stats?.data?.groupsCount, stats?.data?.groupsCount || 0]}
+              values={[stats?.data?.total_chats_count - stats?.data?.groups_count, stats?.data?.groups_count || 0]}
             />
             <Stack
               position={"absolute"}

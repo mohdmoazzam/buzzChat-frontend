@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
 import { useErrors } from '../../hooks/hook';
-import { transformImage } from '../../lib/features';
+import { fullName, transformImage } from '../../lib/features';
 import { useAcceptFriendRequestMutation, useGetNotificationsQuery } from '../../redux/api/api';
 import { setIsNotification } from '../../redux/reducers/misc';
 
@@ -23,15 +23,15 @@ const Notification = ({ anchorEl }) => {
   const closeHandler = () => dispatch(setIsNotification(false));
 
   const respond = async (request, accept) => {
-    setPending((p) => ({ ...p, [request._id]: accept ? "accept" : "decline" }));
-    const response = await respondToRequest({ requestId: request._id, accept });
+    setPending((p) => ({ ...p, [request.id]: accept ? "accept" : "decline" }));
+    const response = await respondToRequest({ request_id: request.id, accept });
     setPending((p) => {
-      const { [request._id]: _, ...rest } = p;
+      const { [request.id]: _, ...rest } = p;
       return rest;
     });
 
     if (response.data) {
-      toast.success(accept ? `You and ${request.sender.name} are now friends` : "Request declined");
+      toast.success(accept ? `You and ${fullName(request.sender)} are now friends` : "Request declined");
       refetch();
     } else {
       toast.error(response.error?.data?.message || "Something went wrong");
@@ -93,13 +93,13 @@ const Notification = ({ anchorEl }) => {
         ) : (
           <Stack divider={<Divider sx={{ ml: "68px" }} />}>
             {requests.map((request) => {
-              const busy = pending[request._id];
+              const busy = pending[request.id];
               return (
-                <Stack key={request._id} direction="row" spacing={1.5} alignItems="flex-start" sx={{ px: 2, py: 1.5 }}>
-                  <Avatar src={transformImage(request.sender.avatar)} sx={{ width: 40, height: 40 }} />
+                <Stack key={request.id} direction="row" spacing={1.5} alignItems="flex-start" sx={{ px: 2, py: 1.5 }}>
+                  <Avatar src={transformImage(request.sender.avatar?.url)} sx={{ width: 40, height: 40 }} />
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
-                      <Box component="span" fontWeight={600}>{request.sender.name}</Box> sent you a friend request
+                      <Box component="span" fontWeight={600}>{fullName(request.sender)}</Box> sent you a friend request
                     </Typography>
                     <Stack direction="row" spacing={1} mt={1}>
                       <Button

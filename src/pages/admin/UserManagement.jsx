@@ -5,7 +5,7 @@ import { useSelector } from 'react-redux';
 import AdminLayout from '../../components/layout/AdminLayout';
 import Table from '../../components/shared/Table';
 import { server } from '../../constants/config';
-import { transformImage } from '../../lib/features';
+import { fullName, transformImage } from '../../lib/features';
 
 
 const columns = [
@@ -81,8 +81,10 @@ const UserManagement = () => {
     if (data) {
       setRows(data?.data?.map((d) => ({
         ...d,
-        id: d._id,
-        avatar: transformImage(d.avatar, 50)
+        name: fullName(d),
+        avatar: transformImage(d.avatar.url, 50),
+        friends: d.friends_count,
+        groups: d.groups_count,
       })));
     }
   }, [data]);

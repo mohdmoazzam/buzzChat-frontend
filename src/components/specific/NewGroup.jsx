@@ -27,8 +27,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { orange } from '../../constants/color';
 import { useErrors } from '../../hooks/hook';
-import { transformImage } from '../../lib/features';
-import { useAvailableFriendsQuery, useNewGroupMutation } from '../../redux/api/api';
+import { fullName, transformImage } from '../../lib/features';
+import { useAvailableFriendsQuery, useNewGroupMutation, useUploadAssetsMutation } from '../../redux/api/api';
 import { setIsNewGroup, setIsSearch } from '../../redux/reducers/misc';
 import { ButtonLoader } from '../layout/Loaders';
 import { VisuallyHiddenInput } from '../styles/StyledComponent';
@@ -68,7 +68,9 @@ const NewGroup = () => {
   const [selectedIds, setSelectedIds] = useState([]);
 
   const { isError, isLoading, error, data } = useAvailableFriendsQuery();
-  const [newGroup, { isLoading: isCreating }] = useNewGroupMutation();
+  const [newGroup, { isLoading: isSaving }] = useNewGroupMutation();
+  const [uploadAssets, { isLoading: isUploading }] = useUploadAssetsMutation();
+  const isCreating = isSaving || isUploading;
 
   useErrors([{ isError, error }]);
 
@@ -76,12 +78,12 @@ const NewGroup = () => {
 
   const friends = data?.data ?? [];
   const selectedFriends = useMemo(
-    () => selectedIds.map((id) => friends.find((f) => f._id === id)).filter(Boolean),
+    () => selectedIds.map((id) => friends.find((f) => f.id === id)).filter(Boolean),
     [selectedIds, friends]
   );
   const filteredFriends = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    return q ? friends.filter((f) => f.name?.toLowerCase().includes(q)) : friends;
+    return q ? friends.filter((f) => fullName(f).toLowerCase().includes(q)) : friends;
   }, [friends, filter]);
 
   const remaining = Math.max(0, MIN_OTHERS - selectedIds.length);
@@ -119,17 +121,24 @@ const NewGroup = () => {
   const createGroup = async () => {
     if (remaining > 0) return toast.error(`Select ${remaining} more ${remaining === 1 ? "friend" : "friends"}`);
 
-    const formData = new FormData();
-    formData.append("name", groupName.trim());
-    if (description.trim()) formData.append("description", description.trim());
-    selectedIds.forEach((id) => formData.append("members", id));
-    if (avatarFile) formData.append("avatar", avatarFile);
+    // The picture is uploaded first; the group then refers to it by id
+    let avatarId;
+    if (avatarFile) {
+      const uploaded = await uploadAssets([avatarFile]);
+      if (!uploaded.data) return toast.error(uploaded.error?.data?.message || "Couldn't upload the group picture");
+      avatarId = uploaded.data.assets[0].id;
+    }
 
-    const response = await newGroup(formData);
+    const response = await newGroup({
+      name: groupName.trim(),
+      ...(description.trim() ? { description: description.trim() } : {}),
+      members: selectedIds,
+      ...(avatarId ? { avatar_id: avatarId } : {}),
+    });
     if (response.data) {
       toast.success(`"${groupName.trim()}" created`);
       closeHandler();
-      if (response.data.chatId) navigate(`/chat/${response.data.chatId}`);
+      if (response.data.chat_id) navigate(`/chat/${response.data.chat_id}`);
     } else {
       toast.error(response.error?.data?.message || "Couldn't create group");
     }
@@ -291,17 +300,17 @@ const NewGroup = () => {
               <Stack direction="row" spacing={1} sx={{ overflowX: "auto", pb: 0.5 }} className="custom-scrollbar">
                 {selectedFriends.map((friend) => (
                   <Stack
-                    key={friend._id}
+                    key={friend.id}
                     direction="row"
                     alignItems="center"
                     spacing={0.75}
                     sx={{ flexShrink: 0, bgcolor: "rgba(234,112,112,0.1)", borderRadius: "999px", pl: 0.5, pr: 0.25, py: 0.25 }}
                   >
-                    <Avatar src={transformImage(friend.avatar)} sx={{ width: 24, height: 24 }} />
+                    <Avatar src={transformImage(friend.avatar?.url)} sx={{ width: 24, height: 24 }} />
                     <Typography variant="body2" fontWeight={600} color="#c74e4e" sx={{ maxWidth: 110 }} noWrap>
-                      {friend.name.split(" ")[0]}
+                      {friend.first_name}
                     </Typography>
-                    <IconButton size="small" onClick={() => toggleMember(friend._id)} aria-label={`Remove ${friend.name}`} sx={{ color: "#c74e4e", p: 0.25 }}>
+                    <IconButton size="small" onClick={() => toggleMember(friend.id)} aria-label={`Remove ${fullName(friend)}`} sx={{ color: "#c74e4e", p: 0.25 }}>
                       <CloseIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </Stack>
@@ -355,10 +364,10 @@ const NewGroup = () => {
               <Stack divider={<Divider sx={{ ml: "64px", mr: 1 }} />}>
                 {filteredFriends.map((friend) => (
                   <FriendRow
-                    key={friend._id}
+                    key={friend.id}
                     friend={friend}
-                    selected={selectedIds.includes(friend._id)}
-                    onToggle={() => toggleMember(friend._id)}
+                    selected={selectedIds.includes(friend.id)}
+                    onToggle={() => toggleMember(friend.id)}
                   />
                 ))}
               </Stack>
@@ -424,9 +433,9 @@ const FriendRow = ({ friend, selected, onToggle }) => (
       "&:focus-visible": { outline: `2px solid ${orange}`, outlineOffset: -2 },
     }}
   >
-    <Avatar src={transformImage(friend.avatar)} sx={{ width: 40, height: 40 }} />
+    <Avatar src={transformImage(friend.avatar?.url)} sx={{ width: 40, height: 40 }} />
     <Typography fontWeight={selected ? 600 : 500} sx={{ flex: 1, minWidth: 0 }} noWrap>
-      {friend.name}
+      {fullName(friend)}
     </Typography>
     <Box
       sx={{

@@ -26,8 +26,8 @@ const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
     return groupChat ? "Group chat" : isOnline ? "Online" : "No messages yet";
   }
 
-  const mine = lastMessage.sender?._id === myId;
-  const prefix = mine ? "You: " : groupChat ? `${lastMessage.sender?.name?.split(" ")[0] ?? ""}: ` : "";
+  const mine = !!myId && lastMessage.sender?.id === myId;
+  const prefix = mine ? "You: " : groupChat ? `${lastMessage.sender?.first_name ?? "Deleted user"}: ` : "";
   const attachments = lastMessage.attachments ?? [];
 
   if (!lastMessage.content && attachments.length) {
@@ -46,19 +46,19 @@ const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
 };
 
 const ChatItem = ({
-  avatar = [], name, _id, groupChat = false, sameSender, isOnline, newMessageAlert, lastMessage,
+  avatar = [], name, id, groupChat = false, sameSender, isOnline, newMessageAlert, lastMessage,
   handleDeleteChat, onSelect,
 }) => {
-  const myId = useSelector((state) => state.auth.user?._id);
+  const myId = useSelector((state) => state.auth.user?.id);
   const unread = newMessageAlert?.count || 0;
-  const time = formatChatTime(lastMessage?.createdAt);
+  const time = formatChatTime(lastMessage?.created_at);
 
   return (
     <Box
       component={Link}
-      to={`/chat/${_id}`}
+      to={`/chat/${id}`}
       onClick={onSelect}
-      onContextMenu={(e) => handleDeleteChat(e, _id, groupChat)}
+      onContextMenu={(e) => handleDeleteChat(e, id, groupChat)}
       sx={{
         display: "flex",
         alignItems: "center",

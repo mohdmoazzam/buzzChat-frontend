@@ -22,17 +22,17 @@ const api = createApi({
     endpoints: (builder) => ({
         // Paginated; every page is merged into one cached list for infinite scroll
         myChats: builder.query({
-            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updatedAt", order = "desc", search = "" } = {}) => ({
+            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updated_at", order = "desc", search = "" } = {}) => ({
                 url: "chat/my",
-                params: { page, take, orderBy, order, ...(search ? { search } : {}) },
+                params: { page, take, order_by: orderBy, order, ...(search ? { search } : {}) },
                 credentials: "include"
             }),
             serializeQueryArgs: ({ endpointName }) => endpointName,
             merge: (current, incoming, { arg }) => {
                 // Page 1 (initial load or refresh) replaces the list; later pages append
                 if (!arg?.page || arg.page === 1) return incoming;
-                const seen = new Set(current.chats.map((chat) => chat._id));
-                current.chats.push(...incoming.chats.filter((chat) => !seen.has(chat._id)));
+                const seen = new Set(current.chats.map((chat) => chat.id));
+                current.chats.push(...incoming.chats.filter((chat) => !seen.has(chat.id)));
                 current.pagination = incoming.pagination;
             },
             forceRefetch: ({ currentArg, previousArg }) =>
@@ -103,6 +103,16 @@ const api = createApi({
             keepUnusedDataFor: 0,
         }),
 
+        // Files go here first (multipart "files"); other endpoints take the returned asset ids
+        uploadAssets: builder.mutation({
+            query: (files) => {
+                const body = new FormData();
+                files.forEach((file) => body.append("files", file));
+                return { url: "assets", method: "POST", credentials: "include", body };
+            },
+        }),
+
+        // { chat_id, attachment_ids }
         sendAttachments: builder.mutation({
             query: (data) => ({
                 url: "chat/message",
@@ -125,7 +135,7 @@ const api = createApi({
         availableFriends: builder.query({
             query: (chatId) => {
                 let url = `user/myFriends`;
-                if (chatId) url += `?chatId=${chatId}`;
+                if (chatId) url += `?chat_id=${chatId}`;
                 return {
                     url: url, credentials: "include"
                 }
@@ -134,24 +144,24 @@ const api = createApi({
         }),
 
         newGroup: builder.mutation({
-            // FormData: name, description, members (repeated), avatar
-            query: (formData) => ({
+            // { name, description, members, avatar_id? }
+            query: (body) => ({
                 url: "chat/new",
                 method: "POST",
                 credentials: "include",
-                body: formData
+                body
             }),
             keepUnusedDataFor: 0,
             invalidatesTags: ["Chat"],
         }),
 
         renameGroup: builder.mutation({
-            // Pass either { chatId, name } or { chatId, formData } (name, description, avatar)
-            query: ({ chatId, name, formData }) => ({
+            // { chatId, ...fields } where fields are name, description and/or avatar_id
+            query: ({ chatId, ...fields }) => ({
                 url: `chat/${chatId}`,
                 method: "PUT",
                 credentials: "include",
-                body: formData ?? { name }
+                body: fields
             }),
             invalidatesTags: ["Chat"]
         }),
@@ -161,7 +171,7 @@ const api = createApi({
                 url: "chat/removeMember",
                 method: "PUT",
                 credentials: "include",
-                body: { chatId, userId }
+                body: { chat_id: chatId, user_id: userId }
             }),
             invalidatesTags: ["Chat"]
         }),
@@ -171,7 +181,7 @@ const api = createApi({
                 url: "chat/addMembers",
                 method: "PUT",
                 credentials: "include",
-                body: { members, chatId }
+                body: { members, chat_id: chatId }
             }),
             invalidatesTags: ["Chat"]
         }),
@@ -224,6 +234,7 @@ export const {
     useGetChatDetailsQuery,
     useGetChatMessagesQuery,
     useSendAttachmentsMutation,
+    useUploadAssetsMutation,
     useMyGroupsQuery,
     useAvailableFriendsQuery,
     useNewGroupMutation,
