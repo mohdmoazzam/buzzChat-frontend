@@ -16,11 +16,13 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import axios from "axios";
 import React, { Suspense, lazy } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
+import { server } from "../../constants/config";
 import { userNotExists } from "../../redux/reducers/auth";
 import { resetNotification } from "../../redux/reducers/chat";
 import {
@@ -57,7 +59,12 @@ const Header = () => {
     navigate("/groups");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await axios.get(`${server}/api/v1/user/logout`, { withCredentials: true });
+    } catch (err) {
+      // Still clear local session even if the request fails
+    }
     dispatch(userNotExists());
     toast.success("Logged out successfully");
   };

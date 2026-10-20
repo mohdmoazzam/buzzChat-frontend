@@ -40,12 +40,11 @@ const Chat = ({ chatId }) => {
 
   const socket = getSocket();
 
-  const chatDetails = useGetChatDetailsQuery({ chatId, skip: !chatId });
-  const oldMessagesChunk = useGetChatMessagesQuery({
-    chatId,
-    page,
-    skip: !chatId,
-  });
+  const chatDetails = useGetChatDetailsQuery({ chatId }, { skip: !chatId });
+  const oldMessagesChunk = useGetChatMessagesQuery(
+    { chatId, page },
+    { skip: !chatId }
+  );
 
   const { data: oldMessages, setData: setOldMessages } = useInfiniteScrollTop(
     containerRef,
@@ -111,7 +110,7 @@ const Chat = ({ chatId }) => {
     typingTimeout.current = setTimeout(() => {
       socket.emit("STOP_TYPING", { members, chatId });
       setIamTyping(false);
-    }, [2000]);
+    }, 2000);
   };
 
   const newMessagesListener = useCallback(
@@ -151,7 +150,7 @@ const Chat = ({ chatId }) => {
       createdAt: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, messageForAlert]);
-  }, []);
+  }, [chatId]);
 
   const eventHandler = {
     NEW_MESSAGE: newMessagesListener,

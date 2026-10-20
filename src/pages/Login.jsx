@@ -1,28 +1,64 @@
 import { useFileHandler, useInputValidation } from '6pp';
-import { CameraAlt as CameraAltIcon, RemoveRedEye, VisibilityOff } from "@mui/icons-material";
-import { Avatar, Button, Container, IconButton, Paper, Stack, TextField, Typography } from "@mui/material";
+import {
+  CameraAlt as CameraAltIcon,
+  ChatBubbleRounded as ChatIcon,
+  LockOutlined as LockIcon,
+  PersonOutline as PersonIcon,
+  Visibility,
+  VisibilityOff,
+  AlternateEmail as AtIcon,
+  BadgeOutlined as BadgeIcon,
+  NotesOutlined as NotesIcon,
+} from "@mui/icons-material";
+import {
+  Avatar,
+  Box,
+  Button,
+  CircularProgress,
+  IconButton,
+  InputAdornment,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
 import axios from 'axios';
+import { AnimatePresence, motion } from "framer-motion";
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
 import { VisuallyHiddenInput } from '../components/styles/StyledComponent';
+import { orange } from "../constants/color";
 import { server } from "../constants/config";
 import { setToken, userExists } from '../redux/reducers/auth';
 import { usernameValidator } from '../utils/validators';
+
+const accentDark = "#d85c5c";
+
+const fieldSx = {
+  "& .MuiOutlinedInput-root": {
+    borderRadius: "12px",
+    backgroundColor: "#fafafa",
+    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#cfcfcf" },
+    "&.Mui-focused": { backgroundColor: "#fff" },
+    "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: orange, borderWidth: "2px" },
+  },
+  "& .MuiInputLabel-root.Mui-focused": { color: accentDark },
+};
+
+const iconAdornment = (Icon) => (
+  <InputAdornment position="start">
+    <Icon sx={{ color: "text.disabled", fontSize: 20 }} />
+  </InputAdornment>
+);
 
 const Login = () => {
 
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false)
+  const [showPassword, setShowPassword] = useState(false);
+  const [avatarMissing, setAvatarMissing] = useState(false);
 
   const dispatch = useDispatch();
-  const navigate = useNavigate();
-
-  const toggleLogin = () => {
-    setIsLogin(!isLogin);
-  };
 
   const name = useInputValidation("");
   const bio = useInputValidation("");
@@ -30,26 +66,29 @@ const Login = () => {
   const password = useInputValidation("");
   const avatar = useFileHandler("single");
 
+  const toggleLogin = () => {
+    setIsLogin((prev) => !prev);
+    setShowPassword(false);
+    setAvatarMissing(false);
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     const toastId = toast.loading("Logging In...");
     setIsLoading(true);
-    const config = {
-      headers: {
-        "Content-Type": "application/json"
-      }
-    };
     try {
       const { data } = await axios.post(`${server}/api/v1/user/login`, {
         username: username.value,
         password: password.value
-      }, config);
+      }, {
+        withCredentials: true,
+        headers: { "Content-Type": "application/json" }
+      });
       dispatch(userExists(data.user));
       dispatch(setToken(data));
       toast.success(data.message, { id: toastId });
     } catch (ex) {
-      console.error(ex);
-      toast.error(ex?.response?.data?.message, { id: toastId });
+      toast.error(ex?.response?.data?.message || "Something went wrong", { id: toastId });
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +96,13 @@ const Login = () => {
 
   const handleSignUp = async (e) => {
     e.preventDefault();
-    const toastId = toast.loading("Signing Up...");
+    if (!avatar.file) {
+      setAvatarMissing(true);
+      return toast.error("Please add a profile photo");
+    }
+    if (username.error) return toast.error(username.error);
+
+    const toastId = toast.loading("Creating your account...");
     setIsLoading(true);
     const formData = new FormData();
     formData.append("avatar", avatar.file);
@@ -66,159 +111,268 @@ const Login = () => {
     formData.append("password", password.value);
     formData.append("username", username.value);
     try {
-      const { data } = await axios.post(`${server}/api/v1/user/register`, formData, { withCredentials: true }, {
-        headers: {
-          "Content-Type": "multipart/form-data"
-        }
+      const { data } = await axios.post(`${server}/api/v1/user/register`, formData, {
+        withCredentials: true,
+        headers: { "Content-Type": "multipart/form-data" }
       });
       dispatch(userExists(data.user));
+      dispatch(setToken(data));
       toast.success(data.message, { id: toastId });
     } catch (ex) {
-      toast.error(ex?.response?.data?.message, { id: toastId });
+      toast.error(ex?.response?.data?.message || "Something went wrong", { id: toastId });
     } finally {
-      setIsLoading(true);
+      setIsLoading(false);
     }
   };
 
-  return (
-    <div style={{
-      height: isLogin ? "100vh" : "115vh",
-      backgroundImage: "linear-gradient(rgba(200, 200, 200, 0.5), rgba(120, 110, 220, 0.5))"
-    }}>
-      <Container component={"main"} maxWidth="xs" sx={{ height: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}>
-        <Paper elevation={3} sx={{ padding: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
-          {
-            isLogin ?
-              <>
-                <Typography variant='h5'> Login </Typography>
-                <form style={{ width: "100%", marginTop: "1rem", position: "relative" }} onSubmit={handleLogin}>
-                  <TextField required fullWidth label="Username" margin='normal' variant='outlined' value={username.value} onChange={username.changeHandler} />
-                  <TextField
-                    required
-                    fullWidth
-                    label="Password"
-                    type={showPassword ? "text" : "password"}
-                    margin='normal'
-                    variant='outlined'
-                    value={password.value}
-                    onChange={password.changeHandler}
-                  />
-                  <span
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    style={{ position: "absolute", right: 5, top: "113px", cursor: "pointer" }}
-                  >
-                    {
-                      showPassword ? (
-                        <VisibilityOff />
-                      ) : (
-                        <RemoveRedEye />
-                      )
-                    }
-                  </span>
-                  <Button
-                    sx={{ marginTop: "1rem" }}
-                    variant='contained'
-                    fullWidth
-                    color='primary'
-                    type='submit'
-                    onClick={handleLogin}
-                    disabled={isLoading}
-                  >
-                    Login
-                  </Button>
-                  <Typography textAlign={"center"} m={"1rem"}>OR</Typography>
-                  <Button variant='text' fullWidth onClick={toggleLogin} disabled={isLoading}>Sign Up</Button>
-                </form>
-              </> :
-              <>
-                <Typography variant='h5'> Sign Up </Typography>
-                <form style={{ width: "100%", marginTop: "1rem", position: "relative" }} onSubmit={handleSignUp}>
-                  <Stack position={"relative"} width={"10rem"} margin={"auto"}>
-                    <Avatar sx={{ width: "10rem", height: "10rem", objectFit: "contain" }} src={avatar.preview} />
-                    <IconButton sx={{
-                      position: "absolute",
-                      bottom: "0",
-                      right: "0",
-                      color: "white",
-                      bgcolor: "rgba(0, 0,0,0.5)",
-                      ":hover": {
-                        bgcolor: "rgba(0, 0,0,0.7)"
-                      }
-                    }}
-                      component="label"
-                    >
-                      <>
-                        <CameraAltIcon />
-                        <VisuallyHiddenInput type='file' onChange={avatar.changeHandler} />
-                      </>
-                    </IconButton>
-                  </Stack>
-                  {
-                    avatar.error && (
-                      <Typography m={"1rem"} width={"fit-content"} display={"block"} color="error" variant='caption'>
-                        {avatar.error}
-                      </Typography>
-                    )
-                  }
-                  <TextField required fullWidth label="Name" margin='normal' variant='outlined' value={name.value} onChange={name.changeHandler} />
-                  <TextField required fullWidth label="Bio" margin='normal' variant='outlined' value={bio.value} onChange={bio.changeHandler} />
-                  <TextField required fullWidth label="Username" margin='normal' variant='outlined' value={username.value} onChange={username.changeHandler} />
-                  {
-                    username.error && (
-                      <Typography color="error" variant='caption'>
-                        {username.error}
-                      </Typography>
-                    )
-                  }
-                  <TextField
-                    required
-                    fullWidth
-                    label="Password"
-                    type={showPassword ? "text" : "password"}
-                    margin='normal'
-                    variant='outlined'
-                    value={password.value}
-                    onChange={password.changeHandler}
-                  />
+  const avatarChangeHandler = (e) => {
+    avatar.changeHandler(e);
+    setAvatarMissing(false);
+  };
 
-                  <span
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    style={{ position: "absolute", right: 5, top: "431px", cursor: "pointer" }}
-                  >
-                    {
-                      showPassword ? (
-                        <VisibilityOff />
-                      ) : (
-                        <RemoveRedEye />
-                      )
-                    }
-                  </span>
-                  <Button
-                    sx={{ marginTop: "1rem" }}
-                    variant='contained'
-                    fullWidth color='primary'
-                    type='submit'
-                    onClick={handleSignUp}
-                    disabled={isLoading}
-                  >
-                    Sign Up
-                  </Button>
-                  <Typography textAlign={"center"} m={"1rem"}>OR</Typography>
-                  <Button
-                    disabled={isLoading}
-                    variant='text'
-                    fullWidth
-                    onClick={toggleLogin}
-                  >
-                    Log In
-                  </Button>
+  const passwordField = (
+    <TextField
+      required
+      fullWidth
+      label="Password"
+      type={showPassword ? "text" : "password"}
+      autoComplete={isLogin ? "current-password" : "new-password"}
+      value={password.value}
+      onChange={password.changeHandler}
+      sx={fieldSx}
+      InputProps={{
+        startAdornment: iconAdornment(LockIcon),
+        endAdornment: (
+          <InputAdornment position="end">
+            <IconButton
+              edge="end"
+              size="small"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((prev) => !prev)}
+            >
+              {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+            </IconButton>
+          </InputAdornment>
+        ),
+      }}
+    />
+  );
+
+  const usernameField = (
+    <TextField
+      required
+      fullWidth
+      label="Username"
+      autoComplete="username"
+      value={username.value}
+      onChange={username.changeHandler}
+      error={!isLogin && !!username.value && !!username.error}
+      helperText={!isLogin && username.value && username.error ? username.error : ""}
+      sx={fieldSx}
+      InputProps={{ startAdornment: iconAdornment(AtIcon) }}
+    />
+  );
+
+  const submitButton = (label) => (
+    <Button
+      type="submit"
+      variant="contained"
+      fullWidth
+      disableElevation
+      disabled={isLoading}
+      sx={{
+        py: 1.4,
+        borderRadius: "12px",
+        textTransform: "none",
+        fontSize: "1rem",
+        fontWeight: 600,
+        bgcolor: orange,
+        "&:hover": { bgcolor: accentDark },
+      }}
+    >
+      {isLoading ? <CircularProgress size={24} sx={{ color: "white" }} /> : label}
+    </Button>
+  );
+
+  return (
+    <Box sx={{ minHeight: "100vh", display: "flex", bgcolor: { xs: "#fff", md: "#f6f6f8" } }}>
+
+      {/* Brand panel (desktop only) */}
+      <Box
+        sx={{
+          display: { xs: "none", md: "flex" },
+          flex: 1,
+          flexDirection: "column",
+          justifyContent: "space-between",
+          p: 6,
+          color: "white",
+          background: `linear-gradient(145deg, ${orange} 0%, #c94f7c 100%)`,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <Box sx={{ position: "absolute", width: 420, height: 420, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.08)", top: -120, right: -140 }} />
+        <Box sx={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", bgcolor: "rgba(255,255,255,0.06)", bottom: -100, left: -80 }} />
+
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ position: "relative" }}>
+          <ChatIcon sx={{ fontSize: 32 }} />
+          <Typography variant="h5" fontWeight={700}>BuzzChat</Typography>
+        </Stack>
+
+        <Box sx={{ position: "relative", maxWidth: 440 }}>
+          <Typography variant="h3" fontWeight={700} lineHeight={1.15} mb={2}>
+            Conversations that keep up with you.
+          </Typography>
+          <Typography sx={{ opacity: 0.85, fontSize: "1.1rem" }}>
+            Real-time messaging, group chats and file sharing, all in one place.
+          </Typography>
+        </Box>
+
+        <Typography variant="body2" sx={{ opacity: 0.7, position: "relative" }}>
+          © {new Date().getFullYear()} BuzzChat
+        </Typography>
+      </Box>
+
+      {/* Form panel */}
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", px: 2, py: 4 }}>
+        <Box
+          sx={{
+            width: "100%",
+            maxWidth: 420,
+            bgcolor: "#fff",
+            borderRadius: { xs: 0, md: "20px" },
+            boxShadow: { xs: "none", md: "0 10px 40px rgba(0,0,0,0.06)" },
+            p: { xs: 1, sm: 4 },
+          }}
+        >
+          {/* Mobile logo */}
+          <Stack direction="row" alignItems="center" spacing={1} mb={3} sx={{ display: { xs: "flex", md: "none" }, color: orange }}>
+            <ChatIcon />
+            <Typography variant="h6" fontWeight={700}>BuzzChat</Typography>
+          </Stack>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={isLogin ? "login" : "signup"}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Typography variant="h4" fontWeight={700} fontSize={{ xs: "1.75rem", sm: "2rem" }}>
+                {isLogin ? "Welcome back" : "Create account"}
+              </Typography>
+              <Typography color="text.secondary" mt={0.5} mb={3}>
+                {isLogin ? "Log in to continue your conversations." : "Join BuzzChat in less than a minute."}
+              </Typography>
+
+              {isLogin ? (
+                <form onSubmit={handleLogin}>
+                  <Stack spacing={2}>
+                    {usernameField}
+                    {passwordField}
+                    {submitButton("Log in")}
+                  </Stack>
                 </form>
-              </>
-          }
-        </Paper>
-      </Container>
-    </div>
-  )
-}
+              ) : (
+                <form onSubmit={handleSignUp}>
+                  <Stack spacing={2}>
+                    <Stack alignItems="center" spacing={1}>
+                      <Box sx={{ position: "relative" }}>
+                        <Avatar
+                          src={avatar.preview}
+                          sx={{
+                            width: 96,
+                            height: 96,
+                            bgcolor: "#f3f3f3",
+                            color: "text.disabled",
+                            border: `2px dashed ${avatarMissing || avatar.error ? "#d32f2f" : avatar.preview ? "transparent" : "#d0d0d0"}`,
+                          }}
+                        >
+                          <PersonIcon sx={{ fontSize: 44 }} />
+                        </Avatar>
+                        <IconButton
+                          component="label"
+                          aria-label="Upload profile photo"
+                          size="small"
+                          sx={{
+                            position: "absolute",
+                            bottom: 0,
+                            right: 0,
+                            bgcolor: orange,
+                            color: "white",
+                            border: "3px solid white",
+                            "&:hover": { bgcolor: accentDark },
+                          }}
+                        >
+                          <CameraAltIcon sx={{ fontSize: 18 }} />
+                          <VisuallyHiddenInput type="file" accept="image/*" onChange={avatarChangeHandler} />
+                        </IconButton>
+                      </Box>
+                      <Typography
+                        variant="caption"
+                        color={avatarMissing || avatar.error ? "error" : "text.secondary"}
+                      >
+                        {avatar.error || (avatarMissing ? "Profile photo is required" : "Add a profile photo")}
+                      </Typography>
+                    </Stack>
+
+                    <TextField
+                      required
+                      fullWidth
+                      label="Full name"
+                      autoComplete="name"
+                      value={name.value}
+                      onChange={name.changeHandler}
+                      sx={fieldSx}
+                      InputProps={{ startAdornment: iconAdornment(BadgeIcon) }}
+                    />
+                    {usernameField}
+                    <TextField
+                      required
+                      fullWidth
+                      label="Bio"
+                      placeholder="A few words about you"
+                      multiline
+                      maxRows={3}
+                      value={bio.value}
+                      onChange={bio.changeHandler}
+                      sx={fieldSx}
+                      InputProps={{ startAdornment: iconAdornment(NotesIcon) }}
+                    />
+                    {passwordField}
+                    {submitButton("Create account")}
+                  </Stack>
+                </form>
+              )}
+
+              <Typography textAlign="center" color="text.secondary" mt={3}>
+                {isLogin ? "New to BuzzChat?" : "Already have an account?"}{" "}
+                <Box
+                  component="button"
+                  type="button"
+                  onClick={toggleLogin}
+                  disabled={isLoading}
+                  sx={{
+                    border: "none",
+                    background: "none",
+                    p: 0,
+                    font: "inherit",
+                    fontWeight: 600,
+                    color: accentDark,
+                    cursor: "pointer",
+                    "&:hover": { textDecoration: "underline" },
+                  }}
+                >
+                  {isLogin ? "Create an account" : "Log in"}
+                </Box>
+              </Typography>
+            </motion.div>
+          </AnimatePresence>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
 
 export default Login;

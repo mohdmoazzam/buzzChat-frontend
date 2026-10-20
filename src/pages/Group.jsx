@@ -179,7 +179,7 @@ const Group = () => {
   return myGroups.isLoading ? <LayoutLoader /> : (
     <Grid container height={"100vh"}>
       <Grid item sm={4} sx={{ display: { xs: "none", sm: "block" }, backgroundImage: bgGradient }}>
-        <GroupList myGroups={myGroups.data.groups} chatId={chatId} />
+        <GroupList myGroups={myGroups.data?.groups} chatId={chatId} />
       </Grid>
       <Grid item xs={12} sm={8} sx={{
         display: "flex",
@@ -249,7 +249,7 @@ const Group = () => {
         open={isMobileMenuOpen}
         onClose={handleMobileClose}
       >
-        <GroupList w={"50vw"} myGroups={myGroups.data.groups} chatId={chatId} />
+        <GroupList w={"50vw"} myGroups={myGroups.data?.groups} chatId={chatId} />
       </Drawer>
     </Grid>
   )
