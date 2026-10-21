@@ -1,7 +1,9 @@
 import {
   ArrowBackRounded as BackIcon,
+  DeleteForeverOutlined as DeleteAccountIcon,
   DevicesOutlined as DevicesIcon,
   GroupsOutlined as GroupsIcon,
+  LockOutlined as PasswordIcon,
   PersonOutline as PersonIcon,
 } from "@mui/icons-material";
 import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
@@ -10,8 +12,10 @@ import { Link, NavLink } from "react-router-dom";
 
 export const SETTINGS_SECTIONS = [
   { label: "Edit profile", path: "/settings/profile", Icon: PersonIcon },
+  { label: "Password", path: "/settings/password", Icon: PasswordIcon },
   { label: "Devices", path: "/settings/devices", Icon: DevicesIcon },
   { label: "Manage groups", path: "/settings/groups", Icon: GroupsIcon },
+  { label: "Delete account", path: "/settings/delete-account", Icon: DeleteAccountIcon },
 ];
 
 const SettingsNav = ({ onSelect }) => (

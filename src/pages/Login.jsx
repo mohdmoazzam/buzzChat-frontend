@@ -16,6 +16,7 @@ import {
   Avatar,
   Box,
   Button,
+  Divider,
   IconButton,
   InputAdornment,
   Stack,
@@ -27,6 +28,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
+import GoogleSignInButton from "../components/auth/GoogleSignInButton";
 import { ButtonLoader } from "../components/layout/Loaders";
 import { APP_MAX_WIDTH } from "../constants/theme";
 import { VisuallyHiddenInput } from "../components/styles/StyledComponent";
@@ -291,6 +293,15 @@ const Login = () => {
     "&:disabled": { opacity: 0.6, cursor: "default" },
   };
 
+  // "or" and Google's button under the form (nothing when Google sign-in isn't configured)
+  const googleBlock = (mode) =>
+    import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+      <>
+        <Divider sx={{ color: "text.disabled", fontSize: "0.8rem", "&::before, &::after": { borderColor: "#ececf0" } }}>or</Divider>
+        <GoogleSignInButton mode={mode} />
+      </>
+    );
+
   const submitButton = (label, loadingLabel) => (
     <Button
       type="submit"
@@ -549,6 +560,7 @@ const Login = () => {
                         </Box>
                       </Box>
                       {submitButton("Log in", "Logging in")}
+                      {googleBlock("signin")}
                     </Stack>
                   </form>
                 ) : (
@@ -650,6 +662,7 @@ const Login = () => {
                       />
                       {passwordField}
                       {submitButton("Create account", "Creating account")}
+                      {googleBlock("signup")}
                     </Stack>
                   </form>
                 )}
