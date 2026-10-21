@@ -123,7 +123,7 @@ const GroupsList = () => {
                 key={group.id}
                 component="button"
                 type="button"
-                onClick={() => navigate(`/groups?group=${group.id}`)}
+                onClick={() => navigate(`/settings/groups?group=${group.id}`)}
                 sx={{
                   all: "unset",
                   boxSizing: "border-box",
@@ -190,7 +190,7 @@ const GroupDetails = ({ chatId }) => {
   }, [chatId]);
 
   useEffect(() => {
-    if (groupDetails.isError) navigate("/groups");
+    if (groupDetails.isError) navigate("/settings/groups");
   }, [groupDetails.isError, navigate]);
 
   const save = async (fields, successMessage) => {
@@ -243,7 +243,7 @@ const GroupDetails = ({ chatId }) => {
     if (response.data) {
       toast.success("Group deleted");
       setConfirmDelete(false);
-      navigate("/groups");
+      navigate("/settings/groups");
     } else {
       toast.error(response.error?.data?.message || "Couldn't delete group");
     }
@@ -270,7 +270,7 @@ const GroupDetails = ({ chatId }) => {
 
       {/* Top bar */}
       <Stack direction="row" alignItems="center" spacing={1} sx={{ px: { xs: 1.5, sm: 5 }, pt: 2 }}>
-        <IconButton onClick={() => navigate("/groups")} aria-label="Back to groups">
+        <IconButton onClick={() => navigate("/settings/groups")} aria-label="Back to groups">
           <ArrowBackIcon />
         </IconButton>
         <Typography fontWeight={600} color="text.secondary">Groups</Typography>
@@ -524,4 +524,4 @@ const InlineEditor = ({ value, onChange, onSave, onCancel, max, isSaving, multil
   </Box>
 );
 
-export default AppLayout({ showListOnMobile: false })(Group);
+export default AppLayout({ showListOnMobile: false, sidebar: "settings" })(Group);

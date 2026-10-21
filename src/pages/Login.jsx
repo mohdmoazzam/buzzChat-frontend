@@ -171,13 +171,15 @@ const Login = () => {
 
     setIsLoading(true);
     try {
-      // Upload the photo first (no account yet, so this works logged out), then register with its id
+      // Upload the photo first (no account yet, so this works logged out), then register with its id.
+      // Sent without cookies: a leftover session cookie would make the photo that account's,
+      // and register only accepts anonymous uploads ("File not found").
       const files = new FormData();
       files.append("files", avatar.file);
       const { data: uploaded } = await axios.post(
         `${server}/api/v1/assets`,
         files,
-        { withCredentials: true },
+        { withCredentials: false },
       );
 
       const { data } = await axios.post(

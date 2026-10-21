@@ -53,7 +53,7 @@ const Profile = () => {
 
           <Button
             component={Link}
-            to="/profile/edit"
+            to="/settings/profile"
             variant="contained"
             startIcon={<EditIcon />}
             sx={{ borderRadius: "999px", px: 2.5, alignSelf: { xs: "stretch", sm: "center" } }}

@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Routes, Route, useLocation } from "react-router-dom";
 import ProtectRoute from './components/auth/ProtectRoute';
 import { AppLoader } from './components/layout/Loaders';
 import axios from 'axios';
@@ -16,6 +16,10 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Profile = lazy(() => import("./pages/Profile"));
 const EditProfile = lazy(() => import("./pages/EditProfile"));
 const Devices = lazy(() => import("./pages/Devices"));
+const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+
+// Old /groups links (including ?group=) now live under settings
+const GroupsRedirect = () => <Navigate to={`/settings/groups${useLocation().search}`} replace />;
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -28,6 +32,9 @@ const App = () => {
   const dispatch = useDispatch();
 
   const { user, loader, token } = useSelector(state => state.auth);
+  // Signed up but hasn't entered the emailed code: only /verify-email is open to them
+  const verifiedUser = user?.email_verified_at ? user : null;
+  const appRedirect = user ? '/verify-email' : '/login';
 
   useEffect(() => {
     axios.get(`${server}/api/v1/user/me`, {
@@ -48,16 +55,22 @@ const App = () => {
 
           <Routes>
 
-            <Route element={<SocketProvider><ProtectRoute user={user} /></SocketProvider>} >
-              <Route path='/' element={<ProtectRoute user={user}><Home /></ProtectRoute>} />
+            {/* Guard outside the socket: the server refuses unverified sockets, which would log them out */}
+            <Route element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><SocketProvider><Outlet /></SocketProvider></ProtectRoute>} >
+              <Route path='/' element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><Home /></ProtectRoute>} />
               <Route path='/chat/:chatId' element={<Chat />} />
-              <Route path='/groups' element={<Group />} />
               <Route path='/profile' element={<Profile />} />
-              <Route path='/profile/edit' element={<EditProfile />} />
-              <Route path='/profile/devices' element={<Devices />} />
+              <Route path='/settings' element={<Navigate to='/settings/profile' replace />} />
+              <Route path='/settings/profile' element={<EditProfile />} />
+              <Route path='/settings/devices' element={<Devices />} />
+              <Route path='/settings/groups' element={<Group />} />
+              <Route path='/groups' element={<GroupsRedirect />} />
+              <Route path='/profile/edit' element={<Navigate to='/settings/profile' replace />} />
+              <Route path='/profile/devices' element={<Navigate to='/settings/devices' replace />} />
             </Route>
 
             <Route path='/login' element={<ProtectRoute user={!user} redirect='/'><Login /></ProtectRoute>} />
+            <Route path='/verify-email' element={<ProtectRoute user={user && !verifiedUser} redirect={user ? '/' : '/login'}><VerifyEmail /></ProtectRoute>} />
             <Route path='/admin' element={<AdminLogin />} />
             <Route path='/admin/dashboard' element={<Dashboard />} />
             <Route path='/admin/users' element={<UserManagement />} />
