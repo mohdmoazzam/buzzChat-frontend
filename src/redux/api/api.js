@@ -3,10 +3,31 @@ import { server } from "../../constants/config";
 import { userNotExists } from "../reducers/auth";
 
 
-export const CHAT_PAGE_SIZE = 20;
+// How many rows each list asks for per page (sent as ?take=; the server caps it)
+export const PAGE_SIZE = {
+    chats: 20,
+    messages: 20,
+    people: 20,
+    notifications: 20,
+    members: 20,
+    forwardTargets: 30,
+};
+export const CHAT_PAGE_SIZE = PAGE_SIZE.chats;
 
 // Provided by the chat and group lists (alongside "Chat"), so a mutation can refresh just those
 const CHAT_LISTS = { type: "Chat", id: "LIST" };
+
+// List APIs are cursor-paginated: no cursor = first page, then pass back pagination.next_cursor
+const cursorParam = (cursor) => (cursor ? { cursor } : {});
+
+// For lists cached as one merged entry: the first page (initial load or refresh) replaces it,
+// later pages append without duplicates (a re-sorted list can repeat rows across pages)
+const mergeCursorPage = (listKey) => (current, incoming, { arg }) => {
+    if (!arg?.cursor) return incoming;
+    const seen = new Set(current[listKey].map((item) => item.id));
+    current[listKey].push(...incoming[listKey].filter((item) => !seen.has(item.id)));
+    current.pagination = incoming.pagination;
+};
 
 const rawBaseQuery = fetchBaseQuery({
     baseUrl: `${server}/api/v1/`,
@@ -35,23 +56,17 @@ const api = createApi({
     refetchOnFocus: true,
     refetchOnReconnect: true,
     endpoints: (builder) => ({
-        // Paginated; every page is merged into one cached list for infinite scroll
+        // Cursor-paginated; every page is merged into one cached list for infinite scroll
         myChats: builder.query({
-            query: ({ page = 1, take = CHAT_PAGE_SIZE, orderBy = "updated_at", order = "desc", search = "" } = {}) => ({
+            query: ({ cursor, take = CHAT_PAGE_SIZE, orderBy = "updated_at", order = "desc", search = "" } = {}) => ({
                 url: "chat",
-                params: { page, take, order_by: orderBy, order, ...(search ? { search } : {}) },
+                params: { take, order_by: orderBy, order, ...cursorParam(cursor), ...(search ? { search } : {}) },
                 credentials: "include"
             }),
             serializeQueryArgs: ({ endpointName }) => endpointName,
-            merge: (current, incoming, { arg }) => {
-                // Page 1 (initial load or refresh) replaces the list; later pages append
-                if (!arg?.page || arg.page === 1) return incoming;
-                const seen = new Set(current.chats.map((chat) => chat.id));
-                current.chats.push(...incoming.chats.filter((chat) => !seen.has(chat.id)));
-                current.pagination = incoming.pagination;
-            },
+            merge: mergeCursorPage("chats"),
             forceRefetch: ({ currentArg, previousArg }) =>
-                currentArg?.page !== previousArg?.page ||
+                currentArg?.cursor !== previousArg?.cursor ||
                 currentArg?.orderBy !== previousArg?.orderBy ||
                 currentArg?.order !== previousArg?.order ||
                 currentArg?.search !== previousArg?.search,
@@ -65,11 +80,11 @@ const api = createApi({
             providesTags: ["Unread"],
         }),
 
-        // Paginated people search (Find People)
+        // Cursor-paginated people search (Find People)
         searchUser: builder.query({
-            query: ({ search = "", page = 1, take = 20 } = {}) => ({
+            query: ({ search = "", cursor, take = PAGE_SIZE.people } = {}) => ({
                 url: "user/search",
-                params: { page, take, ...(search ? { search } : {}) },
+                params: { take, ...cursorParam(cursor), ...(search ? { search } : {}) },
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
@@ -108,7 +123,7 @@ const api = createApi({
 
         // In-app notifications (friend accepted, added to a group, ...) with the unread count
         getActivity: builder.query({
-            query: ({ take = 20 } = {}) => ({
+            query: ({ take = PAGE_SIZE.notifications } = {}) => ({
                 url: "notifications",
                 params: { take },
                 credentials: "include"
@@ -136,9 +151,25 @@ const api = createApi({
            providesTags: ["Chat"]
         }),
 
+        // Cursor-paginated members (join order); pages for a chat merge into one list for "Show more"
+        groupMembers: builder.query({
+            query: ({ chatId, cursor, take = PAGE_SIZE.members }) => ({
+                url: `chat/${chatId}/members`,
+                params: { take, ...cursorParam(cursor) },
+                credentials: "include"
+            }),
+            serializeQueryArgs: ({ queryArgs }) => queryArgs.chatId,
+            merge: mergeCursorPage("members"),
+            forceRefetch: ({ currentArg, previousArg }) => currentArg?.cursor !== previousArg?.cursor,
+            keepUnusedDataFor: 0,
+            providesTags: ["Chat"],
+        }),
+
+        // One page of history: no cursor = the newest messages, then the cursor of the oldest one loaded
         getChatMessages: builder.query({
-            query: ({ chatId, page }) => ({
-                url: `chat/${chatId}/messages?page=${page}`,
+            query: ({ chatId, cursor, take = PAGE_SIZE.messages }) => ({
+                url: `chat/${chatId}/messages`,
+                params: { take, ...cursorParam(cursor) },
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
@@ -197,7 +228,7 @@ const api = createApi({
         forwardTargets: builder.query({
             query: (search = "") => ({
                 url: "chat",
-                params: { page: 1, take: 30, order_by: "updated_at", order: "desc", ...(search ? { search } : {}) },
+                params: { take: PAGE_SIZE.forwardTargets, order_by: "updated_at", order: "desc", ...(search ? { search } : {}) },
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
@@ -352,6 +383,7 @@ export const {
     useMarkAllActivityReadMutation,
     useGetChatDetailsQuery,
     useGetChatMessagesQuery,
+    useGroupMembersQuery,
     useSendAttachmentsMutation,
     useUploadAssetsMutation,
     useEditMessageMutation,

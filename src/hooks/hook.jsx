@@ -53,22 +53,43 @@ const useSocketsEvents = (socket, handlers) => {
     }, [socket, handlers]);
 };
 
+const LOAD_OLDER_THRESHOLD_PX = 150;
+
 // Chat history that loads older pages when scrolled to the top, keeping the scroll
-// position steady. Same behaviour as 6pp's useInfiniteScrollTop, but de-duplicates
-// on the API's `id` (6pp's version only understands `_id`).
-const useInfiniteScrollTop = (containerRef, totalPages, page, setPage, newData) => {
+// position steady. Like 6pp's useInfiniteScrollTop, but cursor-based (`loadMore` asks for
+// the page before the oldest message) and de-duplicating on the API's `id`.
+const useInfiniteScrollTop = (containerRef, hasMore, loadMore, newData) => {
     const [data, setData] = useState([]);
     const debounceTimer = useRef(null);
+    const lastScrollTop = useRef(0);
+    const scrollingUp = useRef(false);
 
     const handleScroll = useCallback(() => {
+        const container = containerRef.current;
+        if (!container) return;
+        // Only the user scrolling up loads older messages. The app's own scrolls (landing on the
+        // newest message, keeping the place after a page loads) go down, so opening a chat whose
+        // bottom is already near the top doesn't start loading by itself.
+        const top = container.scrollTop;
+        scrollingUp.current = top < lastScrollTop.current;
+        lastScrollTop.current = top;
+
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
         debounceTimer.current = setTimeout(() => {
-            if (!containerRef.current) return;
-            if (containerRef.current.scrollTop === 0 && totalPages !== page) {
-                setPage((oldPage) => oldPage + 1);
-            }
+            if (!containerRef.current || !scrollingUp.current) return;
+            // Start a little before the very top, so the page is often in before the user gets there
+            if (containerRef.current.scrollTop < LOAD_OLDER_THRESHOLD_PX && hasMore) loadMore();
         }, 200);
-    }, [totalPages, page]);
+    }, [hasMore, loadMore]);
+
+    // History cleared (another chat opened): forget the old position, so landing at the bottom
+    // of the new chat doesn't count as scrolling up from the previous one
+    useEffect(() => {
+        if (data.length) return;
+        lastScrollTop.current = 0;
+        scrollingUp.current = false;
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    }, [data.length]);
 
     useEffect(() => {
         const container = containerRef.current;

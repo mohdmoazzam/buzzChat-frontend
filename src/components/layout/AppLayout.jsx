@@ -49,39 +49,41 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (Wrap
 
     const [onlineUsers, setOnlineUsers] = useState([]);
 
-    // Infinite scroll: each page is merged into one cached list (see myChats in api.js)
-    const [chatPage, setChatPage] = useState(1);
+    // Infinite scroll: each page is merged into one cached list (see myChats in api.js).
+    // null = the first page; then the next_cursor of the last page loaded
+    const [chatCursor, setChatCursor] = useState(null);
     const [chatSearch, setChatSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
 
-    // Ask the server only after the user pauses typing; a new search starts at page 1
+    // Ask the server only after the user pauses typing; a new search starts from the first page
     useEffect(() => {
       const timer = setTimeout(() => {
         setDebouncedSearch(chatSearch.trim());
-        setChatPage(1);
+        setChatCursor(null);
       }, SEARCH_DEBOUNCE_MS);
       return () => clearTimeout(timer);
     }, [chatSearch]);
 
     const { isLoading, isFetching, data, isError, error, refetch } = useMyChatsQuery({
-      page: chatPage,
+      cursor: chatCursor,
       take: CHAT_PAGE_SIZE,
       orderBy: CHAT_ORDER_BY,
       order: CHAT_ORDER,
       search: debouncedSearch,
     });
     const hasMoreChats = Boolean(data?.pagination?.has_more);
+    const nextChatCursor = data?.pagination?.next_cursor ?? null;
 
     const loadMoreChats = useCallback(() => {
-      if (hasMoreChats && !isFetching) setChatPage((page) => page + 1);
-    }, [hasMoreChats, isFetching]);
+      if (hasMoreChats && nextChatCursor && !isFetching) setChatCursor(nextChatCursor);
+    }, [hasMoreChats, nextChatCursor, isFetching]);
 
-    // Start over from the newest chats (page 1 replaces the merged list)
+    // Start over from the newest chats (the first page replaces the merged list)
     const reloadFirstPage = useCallback(() => {
-      if (chatPage === 1) return refetch();
-      setChatPage(1);
+      if (chatCursor === null) return refetch();
+      setChatCursor(null);
       return null;
-    }, [chatPage, refetch]);
+    }, [chatCursor, refetch]);
 
     useErrors([{ isError, error }]);
 
@@ -205,12 +207,12 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (Wrap
       onlineUsers,
       isLoading,
       hasMore: hasMoreChats,
-      isLoadingMore: isFetching && chatPage > 1,
+      isLoadingMore: isFetching && chatCursor !== null,
       onLoadMore: loadMoreChats,
       search: chatSearch,
       onSearchChange: setChatSearch,
       // Typing (not yet sent) or a page-1 search request in flight
-      isSearching: chatSearch.trim() !== debouncedSearch || (isFetching && chatPage === 1 && !!debouncedSearch),
+      isSearching: chatSearch.trim() !== debouncedSearch || (isFetching && chatCursor === null && !!debouncedSearch),
     };
 
     return (

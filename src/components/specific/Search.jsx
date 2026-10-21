@@ -28,10 +28,9 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
 import { fullName, transformImage } from "../../lib/features";
-import { useLazySearchUserQuery, useSendFriendRequestMutation } from "../../redux/api/api";
+import { useLazySearchUserQuery, useSendFriendRequestMutation, PAGE_SIZE } from "../../redux/api/api";
 import { setIsNotification, setIsSearch } from "../../redux/reducers/misc";
 
-const PAGE_SIZE = 20;
 
 const Search = () => {
   const { isSearch } = useSelector((state) => state.misc);
@@ -44,7 +43,6 @@ const Search = () => {
   const [users, setUsers] = useState([]);
   const [isSearching, setIsSearching] = useState(true);
   const [pendingIds, setPendingIds] = useState([]);
-  const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const latestSearch = useRef(0);
@@ -56,17 +54,16 @@ const Search = () => {
 
   const closeHandler = () => dispatch(setIsSearch(false));
 
-  // Debounced search for page 1; ignore responses that arrive out of order
+  // Debounced search for the first page; ignore responses that arrive out of order
   useEffect(() => {
     const searchId = ++latestSearch.current;
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const { data } = await searchUser({ search: query.trim(), page: 1, take: PAGE_SIZE });
+        const { data } = await searchUser({ search: query.trim(), take: PAGE_SIZE.people });
         if (searchId !== latestSearch.current) return;
         setUsers(data?.data ?? []);
         setPagination(data?.pagination ?? null);
-        setPage(1);
       } finally {
         if (searchId === latestSearch.current) setIsSearching(false);
       }
@@ -76,25 +73,23 @@ const Search = () => {
 
   const hasMore = Boolean(pagination?.has_more);
 
-  // Next page for the same search, appended to the list
+  // Next page for the same search (after the last person loaded), appended to the list
   const loadMore = useCallback(async () => {
-    if (!hasMore || isSearching || isLoadingMore) return;
+    if (!hasMore || !pagination?.next_cursor || isSearching || isLoadingMore) return;
     const searchId = latestSearch.current;
-    const nextPage = page + 1;
     setIsLoadingMore(true);
     try {
-      const { data } = await searchUser({ search: query.trim(), page: nextPage, take: PAGE_SIZE });
+      const { data } = await searchUser({ search: query.trim(), cursor: pagination.next_cursor, take: PAGE_SIZE.people });
       if (searchId !== latestSearch.current || !data) return;
       setUsers((list) => {
         const seen = new Set(list.map((u) => u.id));
         return [...list, ...data.data.filter((u) => !seen.has(u.id))];
       });
       setPagination(data.pagination);
-      setPage(nextPage);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [hasMore, isSearching, isLoadingMore, page, query, searchUser]);
+  }, [hasMore, pagination, isSearching, isLoadingMore, query, searchUser]);
 
   // Load more when the bottom of the results scrolls into view
   useEffect(() => {
