@@ -23,7 +23,7 @@ import moment from "moment";
 import React, { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
-import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
+import DeleteMessageDialog from "../components/dialogs/DeleteMessageDialog";
 import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
 import GroupInfoPanel, { useGroupActions } from "../components/specific/GroupInfo";
@@ -32,7 +32,8 @@ import DisappearingDialog, { disappearingLabel } from "../components/dialogs/Dis
 // The chat details say whether it's a group
 const isGroupChat = (details) => !!details?.group_chat;
 import AppLayout from "../components/layout/AppLayout";
-import MessageComponent, { replySnippet } from "../components/shared/MessageComponent";
+import MessageComponent, { QUICK_REACTIONS, reactionBuzz, replySnippet } from "../components/shared/MessageComponent";
+import Emoji from "../components/shared/Emoji";
 import { fullName } from "../lib/features";
 import AvatarCard from "../components/shared/AvatarCard";
 import { orange } from "../constants/color";
@@ -40,7 +41,9 @@ import { accentDark } from "../constants/theme";
 import { useErrors, useInfiniteScrollTop, useSocketsEvents } from "../hooks/hook";
 import api, {
   useDeleteMessageMutation,
+  useHideMessageMutation,
   useEditMessageMutation,
+  useReactToMessageMutation,
   useGetChatDetailsQuery,
   useGetChatMessagesQuery,
 } from "../redux/api/api";
@@ -107,6 +110,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [groupMenuAnchor, setGroupMenuAnchor] = useState(null);
   const [disappearingOpen, setDisappearingOpen] = useState(false);
+  // Press and hold (touch): the held message and where, for the floating emoji bar; its actions go in the header
+  const [selected, setSelected] = useState(null);
   // Ticks while expiring messages are on screen, so they vanish on time between cleanup runs
   const [now, setNow] = useState(() => Date.now());
   const typingNames = Object.values(typingUsers);
@@ -252,6 +257,19 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     setOldMessages(swap);
   }, [setOldMessages]);
 
+  // Reacting: tapping your own emoji again removes it; a short buzz either way
+  const [reactToMessage] = useReactToMessageMutation();
+  const reactHandler = useCallback(
+    async (msg, emoji) => {
+      const mineNow = msg.reactions?.find((r) => r.user?.id === user.id)?.emoji;
+      reactionBuzz();
+      const res = await reactToMessage({ chatId, messageId: msg.id, emoji: mineNow === emoji ? null : emoji });
+      if (res.data) replaceMessage(res.data.message);
+      else toast.error(res.error?.data?.message || "Couldn't react");
+    },
+    [chatId, user.id, reactToMessage, replaceMessage]
+  );
+
   const startEditing = (msg) => {
     setReplyingTo(null);
     draftBeforeEdit.current = message;
@@ -324,6 +342,40 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   };
 
   const openActionMenu = useCallback((menu) => setActionMenu(menu), []);
+  const selectMessage = useCallback(({ message: msg, position }) => {
+    const bubble = containerRef.current?.querySelector(`[data-message-id="${msg.id}"]`)?.getBoundingClientRect();
+    const BAR_HEIGHT = 58;
+    const top = bubble ? (bubble.top - BAR_HEIGHT - 8 >= 72 ? bubble.top - BAR_HEIGHT - 8 : bubble.bottom + 8) : position.top;
+    setSelected({ message: msg, top, left: position.left });
+  }, []);
+  const clearSelection = () => setSelected(null);
+
+  // What a message offers: copy its text, edit it (mine, text, within the window), delete it (mine)
+  const actionsFor = (msg) => {
+    const isMine = !!msg && msg.sender?.id === user.id;
+    return {
+      isMine,
+      canCopy: !!msg?.content,
+      canEdit: isMine && !!msg?.content && Date.now() - new Date(msg.created_at).getTime() < EDIT_WINDOW_MS,
+    };
+  };
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied");
+    } catch {
+      toast.error("Couldn't copy the message");
+    }
+  };
+
+  // Esc clears the selection
+  useEffect(() => {
+    if (!selected) return undefined;
+    const onKey = (e) => e.key === "Escape" && setSelected(null);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selected]);
   const closeActionMenu = () => setActionMenu(null);
 
   // What the open menu offers for its message
@@ -343,8 +395,31 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     }
   };
 
+  const [hideMessage] = useHideMessageMutation();
+  // "me" | "everyone" while a delete runs (for the dialog's spinner)
+  const [deleteBusy, setDeleteBusy] = useState(null);
+
+  const removeLocally = useCallback((messageId) => {
+    setMessages((list) => list.filter((msg) => msg.id !== messageId));
+    setOldMessages((list) => list.filter((msg) => msg.id !== messageId));
+  }, [setOldMessages]);
+
+  const deleteForMeHandler = async () => {
+    const target = deleteTarget;
+    setDeleteBusy("me");
+    const res = await hideMessage({ chatId, messageId: target.id });
+    setDeleteBusy(null);
+    if (res.error) return toast.error(res.error?.data?.message || "Something went wrong");
+    removeLocally(target.id);
+    if (editing?.id === target.id) stopEditing();
+    if (replyingTo?.id === target.id) setReplyingTo(null);
+    setDeleteTarget(null);
+  };
+
   const deleteHandler = async () => {
+    setDeleteBusy("everyone");
     const res = await deleteMessage({ chatId, messageId: deleteTarget.id });
+    setDeleteBusy(null);
     if (res.data) {
       replaceMessage(res.data.message);
       if (editing?.id === deleteTarget.id) stopEditing();
@@ -358,6 +433,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     if (e.key === "Escape" && replyingTo && !editing) {
       e.preventDefault();
       setReplyingTo(null);
+      setSelected(null);
       return;
     }
     if (e.key === "Escape" && editing) {
@@ -440,6 +516,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   }, [chatDetails.isError]);
 
   const scrollHandler = () => {
+    if (selected) setSelected(null);
     const el = containerRef.current;
     if (!el) return;
     const near = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
@@ -568,7 +645,15 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     [chatId, dispatch]
   );
 
+  const hiddenListener = useCallback(
+    ({ chat_id: hiddenChatId, message_id: messageId } = {}) => {
+      if (hiddenChatId === chatId && messageId) removeLocally(messageId);
+    },
+    [chatId, removeLocally]
+  );
+
   const eventHandler = {
+    MESSAGE_HIDDEN: hiddenListener,
     MESSAGES_EXPIRED: expiredListener,
     DISAPPEARING_UPDATED: disappearingListener,
     NEW_MESSAGE: newMessagesListener,
@@ -657,6 +742,9 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             seenTotal={seenTotal}
             onOpenMenu={openActionMenu}
             onJumpToReply={jumpToMessage}
+            onReact={reactHandler}
+            onSelect={selectMessage}
+            selected={selected?.message.id === msg.id}
             onOpenProfile={openProfile}
           />
         </Fragment>
@@ -677,8 +765,43 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
           bgcolor: "#fff",
           borderBottom: "1px solid",
           borderColor: "divider",
+          position: "relative",
         }}
       >
+        {selected && (() => {
+          const msg = selected.message;
+          const { canCopy, canEdit } = actionsFor(msg);
+          const act = (fn) => () => { clearSelection(); fn(); };
+          const live = !msg.deleted_at;
+          const actions = [
+            live && { label: "Reply", Icon: ReplyIcon, run: () => startReply(msg) },
+            live && canCopy && { label: "Copy", Icon: CopyIcon, run: () => copyText(msg.content) },
+            live && canEdit && { label: "Edit", Icon: EditIcon, run: () => startEditing(msg) },
+            live && { label: "Forward", Icon: ForwardIcon, run: () => setForwardTarget(msg) },
+            { label: "Delete", Icon: DeleteIcon, run: () => setDeleteTarget(msg), danger: true },
+          ].filter(Boolean);
+          return (
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={0.5}
+              role="toolbar"
+              aria-label="Message actions"
+              // Above the "tap outside to cancel" layer (1250) so its buttons stay tappable
+              sx={{ position: "absolute", inset: 0, zIndex: 1270, px: { xs: 1, sm: 2.5 }, bgcolor: "#fff" }}
+            >
+              <IconButton onClick={clearSelection} aria-label="Cancel selection"><CloseIcon /></IconButton>
+              <Typography fontWeight={600} sx={{ flex: 1 }}>1 selected</Typography>
+              {actions.map(({ label, Icon, run, danger }) => (
+                <Tooltip key={label} title={label}>
+                  <IconButton onClick={act(run)} aria-label={label} sx={{ color: danger ? "error.main" : "text.primary" }}>
+                    <Icon />
+                  </IconButton>
+                </Tooltip>
+              ))}
+            </Stack>
+          );
+        })()}
         <IconButton
           onClick={() => navigate("/")}
           aria-label="Back to chats"
@@ -813,6 +936,48 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
           {userTyping && <Box sx={{ mt: 1 }}><TypingLoader /></Box>}
           </Box>
         </Box>
+
+        {/* Held message: only the emoji bar floats above it (its actions are in the header) */}
+        {selected && (
+          <>
+            <Box onClick={clearSelection} sx={{ position: "fixed", inset: 0, zIndex: 1250 }} aria-hidden />
+            {!selected.message.deleted_at && (
+            <Stack
+              direction="row"
+              spacing={0.25}
+              role="toolbar"
+              aria-label="React"
+              sx={{
+                position: "fixed",
+                zIndex: 1260,
+                // Above the finger, kept on screen (6 buttons at 44px + padding = 280px wide)
+                top: Math.min(selected.top, window.innerHeight - 140),
+                left: Math.min(Math.max(8, selected.left - 140), window.innerWidth - 288),
+                p: 0.75,
+                borderRadius: "999px",
+                bgcolor: "#fff",
+                boxShadow: "0 8px 28px rgba(0,0,0,0.18)",
+                animation: "reactIn 0.16s ease-out",
+                "@keyframes reactIn": { from: { opacity: 0, transform: "translateY(6px)" }, to: { opacity: 1, transform: "none" } },
+              }}
+            >
+              {QUICK_REACTIONS.map((emoji) => {
+                const picked = selected.message.reactions?.some((r) => r.user?.id === user.id && r.emoji === emoji);
+                return (
+                  <IconButton
+                    key={emoji}
+                    aria-label={picked ? `Remove ${emoji} reaction` : `React with ${emoji}`}
+                    onClick={() => { const msg = selected.message; clearSelection(); reactHandler(msg, emoji); }}
+                    sx={{ width: 44, height: 44, bgcolor: picked ? "rgba(38,148,171,0.14)" : "transparent", "&:hover": { bgcolor: picked ? "rgba(38,148,171,0.22)" : "action.hover" } }}
+                  >
+                    <Emoji emoji={emoji} size={28} />
+                  </IconButton>
+                );
+              })}
+            </Stack>
+            )}
+          </>
+        )}
 
         {/* Older messages: floats over the top (out of the flow, so the messages don't jump) */}
         <Fade in={isLoadingOlder || olderFailed} unmountOnExit>
@@ -1021,10 +1186,36 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         anchorPosition={actionMenu?.position}
         PaperProps={{ sx: { borderRadius: "12px", minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" } }}
       >
+        {menuMessage && !menuMessage.deleted_at && (
+          <Stack direction="row" spacing={0.25} sx={{ px: 1, pb: 0.75, pt: 0.25, borderBottom: "1px solid", borderColor: "divider", mb: 0.5 }}>
+            {QUICK_REACTIONS.map((emoji) => {
+              const picked = menuMessage.reactions?.some((r) => r.user?.id === user.id && r.emoji === emoji);
+              return (
+                <IconButton
+                  key={emoji}
+                  aria-label={picked ? `Remove ${emoji} reaction` : `React with ${emoji}`}
+                  onClick={() => { closeActionMenu(); reactHandler(menuMessage, emoji); }}
+                  sx={{
+                    // Highlight instead of scaling: a scaled emoji is redrawn as a resized bitmap
+                    width: 40,
+                    height: 40,
+                    bgcolor: picked ? "rgba(38,148,171,0.14)" : "transparent",
+                    transition: "background-color 0.15s",
+                    "&:hover": { bgcolor: picked ? "rgba(38,148,171,0.22)" : "action.hover" },
+                  }}
+                >
+                  <Emoji emoji={emoji} size={26} />
+                </IconButton>
+              );
+            })}
+          </Stack>
+        )}
+        {!menuMessage?.deleted_at && (
         <MenuItem onClick={() => { closeActionMenu(); startReply(menuMessage); }}>
           <ListItemIcon><ReplyIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Reply</ListItemText>
         </MenuItem>
+        )}
         {canCopy && (
           <MenuItem onClick={copyHandler}>
             <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
@@ -1037,26 +1228,25 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             <ListItemText>Edit</ListItemText>
           </MenuItem>
         )}
+        {!menuMessage?.deleted_at && (
         <MenuItem onClick={() => { closeActionMenu(); setForwardTarget(menuMessage); }}>
           <ListItemIcon><ForwardIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Forward</ListItemText>
         </MenuItem>
-        {menuIsMine && (
-          <MenuItem onClick={() => { closeActionMenu(); setDeleteTarget(menuMessage); }} sx={{ color: "error.main" }}>
-            <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
-            <ListItemText>Delete for everyone</ListItemText>
-          </MenuItem>
         )}
+        <MenuItem onClick={() => { closeActionMenu(); setDeleteTarget(menuMessage); }} sx={{ color: "error.main" }}>
+          <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
+          <ListItemText>Delete</ListItemText>
+        </MenuItem>
       </Menu>
 
-      <ConfirmDeleteDialog
+      <DeleteMessageDialog
         open={!!deleteTarget}
-        handleClose={() => setDeleteTarget(null)}
-        deleteHandler={deleteHandler}
-        title="Delete for everyone?"
-        message="This message will be replaced with “This message was deleted” for everyone in this chat."
-        confirmLabel="Delete"
-        isLoading={isDeleting}
+        onClose={() => setDeleteTarget(null)}
+        canDeleteForEveryone={!!deleteTarget && deleteTarget.sender?.id === user.id && !deleteTarget.deleted_at}
+        onDeleteForMe={deleteForMeHandler}
+        onDeleteForEveryone={deleteHandler}
+        busy={deleteBusy}
       />
 
       <ForwardDialog

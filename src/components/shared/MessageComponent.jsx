@@ -5,11 +5,12 @@ import {
     MoreVertRounded as MenuIcon,
     ShortcutRounded as ForwardIcon,
 } from '@mui/icons-material';
-import { Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, IconButton, Stack, Tooltip, Typography } from '@mui/material';
 import React, { memo, useRef, useState } from 'react';
 import moment from 'moment';
 import { lightBlue, myBubble } from '../../constants/color';
 import { fileFormat, fullName } from '../../lib/features';
+import Emoji from './Emoji';
 import RenderAttachment from './RenderAttachment';
 
 const BIG = "18px";
@@ -190,6 +191,67 @@ const LinkPreviewCard = ({ preview, mine }) => {
     );
 };
 
+/** The quick reactions (message menu); a tap gives a short buzz where the device supports it. */
+export const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+export const reactionBuzz = () => navigator.vibrate?.(15);
+
+
+// "👍 2 ❤️" under the bubble: one chip per emoji; yours is outlined; tap a chip to add or remove it
+const ReactionChips = ({ reactions, myId, mine, onReact }) => {
+    const groups = [];
+    for (const { emoji, user } of reactions) {
+        const group = groups.find((g) => g.emoji === emoji);
+        if (group) group.users.push(user);
+        else groups.push({ emoji, users: [user] });
+    }
+    return (
+        <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ mt: "-6px", mb: 0.25, px: 1, position: "relative", zIndex: 1, justifyContent: mine ? "flex-end" : "flex-start", flexWrap: "wrap", rowGap: 0.5 }}
+        >
+            {groups.map(({ emoji, users }) => {
+                const reacted = users.some((u) => u?.id === myId);
+                const names = users.map((u) => (u?.id === myId ? "You" : fullName(u))).join(", ");
+                return (
+                    <Tooltip key={emoji} title={names} disableInteractive>
+                        <Box
+                            component="button"
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onReact?.(emoji);
+                            }}
+                            aria-label={`${emoji} ${users.length}: ${names}${reacted ? " (tap to remove yours)" : ""}`}
+                            sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 0.4,
+                                px: 0.75,
+                                height: 22,
+                                borderRadius: "999px",
+                                font: "inherit",
+                                // Whole pixels keep emoji glyphs sharp
+                                fontSize: "15px",
+                                lineHeight: 1,
+                                cursor: onReact ? "pointer" : "default",
+                                bgcolor: reacted ? "rgba(38,148,171,0.12)" : "#fff",
+                                border: `1px solid ${reacted ? lightBlue : "#ececf0"}`,
+                                boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+                                transition: "background-color 0.15s",
+                                "&:active": { bgcolor: reacted ? "rgba(38,148,171,0.2)" : "#f4f4f6" },
+                            }}
+                        >
+                            <Emoji emoji={emoji} size={15} />
+                            {users.length > 1 && <Box component="span" sx={{ fontSize: "0.72rem", color: "text.secondary", fontWeight: 600 }}>{users.length}</Box>}
+                        </Box>
+                    </Tooltip>
+                );
+            })}
+        </Stack>
+    );
+};
+
 // Press and hold on touch screens: how long, and how far the finger may drift before it counts as a scroll
 const LONG_PRESS_MS = 450;
 const LONG_PRESS_SLOP_PX = 10;
@@ -246,11 +308,13 @@ const useLongPress = (onLongPress) => {
 
 const MessageComponent = ({
     message, user, showSender = false, isFirst = true, isLast = true, onOpenMenu,
-    isGroup = false, seenBy, seenTotal, onJumpToReply, onOpenProfile,
+    isGroup = false, seenBy, seenTotal, onJumpToReply, onOpenProfile, onReact, onSelect, selected = false,
 }) => {
     const { sender, content, attachments = [], created_at, system, forwarded, edited_at, deleted_at } = message;
-    const hasMenu = !deleted_at && !!onOpenMenu && !system;
-    const longPress = useLongPress(hasMenu ? (position) => onOpenMenu({ message, position }) : null);
+    // Deleted placeholders keep a menu too: "Delete for me" still applies to them
+    const hasMenu = !!onOpenMenu && !system;
+    // Press and hold selects the message (emoji bar + actions in the header) when the chat supports it, else opens the menu
+    const longPress = useLongPress(hasMenu ? (position) => (onSelect ?? onOpenMenu)({ message, position }) : null);
 
     if (system) {
         return (
@@ -350,6 +414,9 @@ const MessageComponent = ({
                     transition: "transform 0.15s ease-out",
                     // Holding a message dips it slightly, so the press is felt before the menu opens
                     transform: longPress.pressing ? "scale(0.97)" : "none",
+                    // Selected (held): a ring around the bubble while its actions are open
+                    outline: selected ? `2px solid ${lightBlue}` : "none",
+                    outlineOffset: 2,
                     // Touch screens: no text selection or iOS callout while pressing and holding (Copy is in the menu)
                     "@media (hover: none)": hasMenu ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" } : {},
                     bgcolor: bubbleColor,
@@ -459,6 +526,10 @@ const MessageComponent = ({
                 </IconButton>
             )}
             </Box>
+
+            {!deleted && message.reactions?.length > 0 && (
+                <ReactionChips reactions={message.reactions} myId={user?.id} mine={mine} onReact={onReact && ((emoji) => onReact(message, emoji))} />
+            )}
         </Box>
     );
 };

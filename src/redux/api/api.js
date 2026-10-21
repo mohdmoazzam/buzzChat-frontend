@@ -259,6 +259,16 @@ const api = createApi({
         }),
 
         // { chatId, messageId, content }
+        // One reaction per person: { emoji } sets (or replaces) yours, null removes it
+        reactToMessage: builder.mutation({
+            query: ({ chatId, messageId, emoji }) => ({
+                url: `chat/${chatId}/messages/${messageId}/reaction`,
+                method: emoji ? "PUT" : "DELETE",
+                credentials: "include",
+                ...(emoji ? { body: { emoji } } : {}),
+            }),
+        }),
+
         editMessage: builder.mutation({
             query: ({ chatId, messageId, content }) => ({
                 url: `chat/${chatId}/messages/${messageId}`,
@@ -269,6 +279,11 @@ const api = createApi({
         }),
 
         // Deletes for everyone
+        // Delete for me: hides any message for this user only
+        hideMessage: builder.mutation({
+            query: ({ chatId, messageId }) => ({ url: `chat/${chatId}/messages/${messageId}/for-me`, method: "DELETE", credentials: "include" }),
+        }),
+
         deleteMessage: builder.mutation({
             query: ({ chatId, messageId }) => ({
                 url: `chat/${chatId}/messages/${messageId}`,
@@ -458,7 +473,9 @@ export const {
     useSendAttachmentsMutation,
     useUploadAssetsMutation,
     useEditMessageMutation,
+    useReactToMessageMutation,
     useDeleteMessageMutation,
+    useHideMessageMutation,
     useForwardMessageMutation,
     useForwardTargetsQuery,
     useMyGroupsQuery,
