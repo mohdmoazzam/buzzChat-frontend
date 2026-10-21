@@ -10,7 +10,6 @@ const ChatList = ({
   chats = [],
   chatId,
   onlineUsers = [],
-  newMessagesAlert = [],
   handleDeleteChat,
   isLoading = false,
   onSelect,
@@ -90,11 +89,7 @@ const ChatList = ({
         ) : visibleChats.length > 0 ? (
           <Stack spacing={0.5}>
             {visibleChats.map((chat) => {
-              const { id, name, group_chat, avatar, members, last_message } = chat;
-
-              const newMessageAlert = newMessagesAlert?.find(
-                ({ chatId }) => chatId === id
-              );
+              const { id, name, group_chat, avatar, members, last_message, unread_count } = chat;
 
               const isOnline = members?.some((member) =>
                 onlineUsers?.includes(member)
@@ -103,7 +98,8 @@ const ChatList = ({
               return (
                 <ChatItem
                   key={id}
-                  newMessageAlert={newMessageAlert}
+                  /* The open chat is being read, so it never shows a badge */
+                  unreadCount={chatId === id ? 0 : unread_count}
                   isOnline={isOnline}
                   avatar={avatar}
                   name={name}

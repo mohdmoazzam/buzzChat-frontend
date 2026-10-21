@@ -27,7 +27,7 @@ import AvatarCard from "../components/shared/AvatarCard";
 import { orange } from "../constants/color";
 import { accentDark } from "../constants/theme";
 import { useErrors, useInfiniteScrollTop, useSocketsEvents } from "../hooks/hook";
-import {
+import api, {
   useDeleteMessageMutation,
   useEditMessageMutation,
   useGetChatDetailsQuery,
@@ -35,7 +35,6 @@ import {
 } from "../redux/api/api";
 import { getSocket } from "../socket";
 import { setIsFileMenu } from "../redux/reducers/misc";
-import { removeNewMessagesAlert } from "../redux/reducers/chat";
 import { TypingLoader } from "../components/layout/Loaders";
 import { useNavigate } from "react-router-dom";
 
@@ -44,6 +43,8 @@ const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const NEAR_BOTTOM_PX = 160;
 // Same window as the server (MESSAGE_EDIT_WINDOW_MS)
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
+// Bursts of incoming messages send one "read" to the server
+const READ_DEBOUNCE_MS = 500;
 
 const dayLabel = (date) => {
   const d = moment(date);
@@ -78,6 +79,9 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const [editing, setEditing] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
+  // How far each other member has read: { [userId]: { read, joined } } in ms, for the ticks
+  const [receipts, setReceipts] = useState({});
+  const readTimer = useRef(null);
   // The unsent draft, put back after an edit
   const draftBeforeEdit = useRef("");
   // For socket listeners, which shouldn't re-subscribe on every edit
@@ -110,6 +114,54 @@ const Chat = ({ chatId, chat, isOnline }) => {
     { isError: chatDetails.isError, error: chatDetails.error },
     { isError: oldMessagesChunk.isError, error: oldMessagesChunk.error },
   ];
+
+  // Marks this chat read while it's on screen: clears the badge now, tells the server shortly after
+  const markRead = useCallback(() => {
+    if (!chatId || document.visibilityState !== "visible") return;
+    dispatch(
+      api.util.updateQueryData("myChats", {}, (draft) => {
+        const current = draft?.chats?.find((item) => item.id === chatId);
+        if (current) current.unread_count = 0;
+      })
+    );
+    clearTimeout(readTimer.current);
+    readTimer.current = setTimeout(() => {
+      readTimer.current = null;
+      socket.emit("CHAT_READ", { chat_id: chatId });
+    }, READ_DEBOUNCE_MS);
+  }, [chatId, dispatch, socket]);
+
+  // On open, and whenever the tab comes back into view
+  useEffect(() => {
+    markRead();
+    const onVisible = () => markRead();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      // Leaving before the debounce fired: still record the read for this chat
+      if (readTimer.current) {
+        clearTimeout(readTimer.current);
+        readTimer.current = null;
+        socket.emit("CHAT_READ", { chat_id: chatId });
+      }
+    };
+  }, [chatId, markRead, socket]);
+
+  // Each loaded page carries the latest receipts; never move a read time backwards
+  const pageReceipts = oldMessagesChunk.currentData?.read_receipts;
+  useEffect(() => {
+    if (!pageReceipts) return;
+    setReceipts((prev) => {
+      const next = { ...prev };
+      pageReceipts.forEach(({ user_id, last_read_at, joined_at }) => {
+        next[user_id] = {
+          joined: Date.parse(joined_at),
+          read: Math.max(Date.parse(last_read_at), prev[user_id]?.read ?? 0),
+        };
+      });
+      return next;
+    });
+  }, [pageReceipts]);
 
   const scrollToBottom = useCallback((behavior = "smooth") => {
     const el = containerRef.current;
@@ -223,7 +275,6 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   useEffect(() => {
     socket.emit("CHAT_JOINED");
-    dispatch(removeNewMessagesAlert({ chatId }));
     hasInitialScroll.current = false;
 
     return () => {
@@ -237,6 +288,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
       setEditing(null);
       setDeleteTarget(null);
       setForwardTarget(null);
+      setReceipts({});
       draftBeforeEdit.current = "";
       socket.emit("CHAT_LEAVED");
     };
@@ -316,8 +368,25 @@ const Chat = ({ chatId, chat, isOnline }) => {
     (data) => {
       if (data.chat_id !== chatId) return;
       setMessages((prev) => [...prev, data.message]);
+      // Seen as it arrives (sending my own already counts as read on the server)
+      if (data.message?.sender?.id !== user.id) markRead();
     },
-    [chatId]
+    [chatId, markRead, user.id]
+  );
+
+  // Another member read up to a point: update the ticks on my messages
+  const messagesReadListener = useCallback(
+    ({ chat_id: readChatId, user_id, read_at } = {}) => {
+      if (readChatId !== chatId || !user_id || user_id === user.id) return;
+      setReceipts((prev) => ({
+        ...prev,
+        [user_id]: {
+          joined: prev[user_id]?.joined ?? 0,
+          read: Math.max(Date.parse(read_at), prev[user_id]?.read ?? 0),
+        },
+      }));
+    },
+    [chatId, user.id]
   );
 
   const startTypingListener = useCallback(
@@ -377,6 +446,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
     NEW_MESSAGE: newMessagesListener,
     MESSAGE_UPDATED: changedMessageListener,
     MESSAGE_DELETED: changedMessageListener,
+    MESSAGES_READ: messagesReadListener,
     START_TYPING: startTypingListener,
     STOP_TYPING: stopTypingListener,
     ALERT: alertListener,
@@ -417,6 +487,16 @@ const Chat = ({ chatId, chat, isOnline }) => {
       const isFirst = !sameGroup(prev, msg);
       const isLast = !sameGroup(msg, next);
 
+      // Ticks on my messages: who was in the chat when it was sent, and how many of them have read it
+      let seenBy;
+      let seenTotal;
+      if (!msg.system && msg.sender?.id === user.id) {
+        const sentAt = Date.parse(msg.created_at);
+        const audience = Object.values(receipts).filter((r) => r.joined <= sentAt);
+        seenTotal = audience.length;
+        seenBy = audience.filter((r) => r.read >= sentAt).length;
+      }
+
       return (
         <Fragment key={msg.id ?? index}>
           {newDay && (
@@ -436,6 +516,9 @@ const Chat = ({ chatId, chat, isOnline }) => {
             isFirst={isFirst || newDay}
             isLast={isLast}
             showSender={isGroup && (isFirst || newDay)}
+            isGroup={!!isGroup}
+            seenBy={seenBy}
+            seenTotal={seenTotal}
             onOpenMenu={openActionMenu}
           />
         </Fragment>

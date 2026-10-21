@@ -15,7 +15,7 @@ const api = createApi({
             }
         }
     }),
-    tagTypes: ["Chat", "Notifications", "Activity"],
+    tagTypes: ["Chat", "Notifications", "Activity", "Unread"],
     // Refresh data when the tab regains focus or the network comes back
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -42,6 +42,12 @@ const api = createApi({
                 currentArg?.search !== previousArg?.search,
             keepUnusedDataFor: 0,
             providesTags: ["Chat"],
+        }),
+
+        // Unread messages across all chats (tab title); refreshed on NEW_MESSAGE_ALERT / MESSAGES_READ
+        unreadTotal: builder.query({
+            query: () => ({ url: "chat/unread-count", credentials: "include" }),
+            providesTags: ["Unread"],
         }),
 
         // Paginated people search (Find People)
@@ -285,6 +291,7 @@ export default api;
 
 export const {
     useMyChatsQuery,
+    useUnreadTotalQuery,
     useLazySearchUserQuery,
     useSendFriendRequestMutation,
     useGetNotificationsQuery,

@@ -3,9 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { useErrors, useSocketsEvents } from "../../hooks/hook";
-import { getOrSaveFromLocalStorage } from "../../lib/features";
-import api, { CHAT_PAGE_SIZE, useMyChatsQuery } from "../../redux/api/api";
-import { setNewMessagesAlert } from "../../redux/reducers/chat";
+import api, { CHAT_PAGE_SIZE, useMyChatsQuery, useUnreadTotalQuery } from "../../redux/api/api";
 import {
   setIsDeleteMenu,
   setIsMobileMenu,
@@ -43,7 +41,9 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
     const chatId = params.chatId;
     const deleteMenuAnchor = useRef(null);
     const { isMobileMenu } = useSelector((state) => state.misc);
-    const { newMessagesAlert } = useSelector((state) => state.chat);
+    const myId = useSelector((state) => state.auth.user?.id);
+    const { data: unreadData } = useUnreadTotalQuery();
+    const unreadTotal = unreadData?.unread_count ?? 0;
 
     const [onlineUsers, setOnlineUsers] = useState([]);
 
@@ -83,13 +83,6 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     useErrors([{ isError, error }]);
 
-    useEffect(() => {
-      getOrSaveFromLocalStorage({
-        key: "NEW_MESSAGE_ALERT",
-        value: newMessagesAlert,
-      });
-    }, [newMessagesAlert]);
-
     const handleDeleteChat = (e, id, groupChat) => {
       e.preventDefault();
       dispatch(setIsDeleteMenu(true));
@@ -99,12 +92,34 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     const handleMobileClose = () => dispatch(setIsMobileMenu(false));
 
+    // Sets a chat's unread badge in the cached chat list
+    const setChatUnread = useCallback((targetChatId, update) => {
+      dispatch(
+        api.util.updateQueryData("myChats", {}, (draft) => {
+          const chat = draft?.chats?.find((item) => item.id === targetChatId);
+          if (chat) chat.unread_count = update(chat.unread_count ?? 0);
+        })
+      );
+    }, [dispatch]);
+
     const newMessageAlertListener = useCallback(
-      (data) => {
-        if (data.chat_id === chatId) return;
-        dispatch(setNewMessagesAlert({ chatId: data.chat_id }));
+      ({ chat_id: alertChatId } = {}) => {
+        // The open chat marks itself read while the tab is visible
+        if (alertChatId === chatId && document.visibilityState === "visible") return;
+        setChatUnread(alertChatId, (count) => count + 1);
+        dispatch(api.util.invalidateTags(["Unread"]));
       },
-      [chatId]
+      [chatId, setChatUnread, dispatch]
+    );
+
+    // I read a chat (here or on another device): clear its badge. Others' reads are the open chat's ticks.
+    const messagesReadListener = useCallback(
+      ({ chat_id: readChatId, user_id } = {}) => {
+        if (user_id !== myId) return;
+        setChatUnread(readChatId, () => 0);
+        dispatch(api.util.invalidateTags(["Unread"]));
+      },
+      [myId, setChatUnread, dispatch]
     );
 
     // The bell's badge reads the pending requests, so just refresh them
@@ -166,6 +181,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       MESSAGE_UPDATED: changedMessageListener,
       MESSAGE_DELETED: changedMessageListener,
       NEW_MESSAGE_ALERT: newMessageAlertListener,
+      MESSAGES_READ: messagesReadListener,
       NEW_REQUEST: newRequestAlertListener,
       NEW_NOTIFICATION: newNotificationListener,
       REFETCH_CHATS: refetchListener,
@@ -183,7 +199,6 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       chats: data?.chats,
       chatId,
       handleDeleteChat,
-      newMessagesAlert,
       onlineUsers,
       isLoading,
       hasMore: hasMoreChats,
@@ -197,7 +212,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
 
     return (
       <>
-        <Title />
+        <Title title={unreadTotal > 0 ? `(${unreadTotal > 99 ? "99+" : unreadTotal}) BuzzChat` : "BuzzChat"} />
         {/* Full-height app; on wide screens the app is a centered column
             on one continuous white page, edged by thin dividers */}
         <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "#fff" }}>

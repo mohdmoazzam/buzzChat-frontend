@@ -1,5 +1,11 @@
-import { BlockRounded as BlockIcon, KeyboardArrowDownRounded as MenuIcon, ShortcutRounded as ForwardIcon } from '@mui/icons-material';
-import { Box, IconButton, Typography } from '@mui/material';
+import {
+    BlockRounded as BlockIcon,
+    DoneAllRounded as SeenIcon,
+    DoneRounded as SentIcon,
+    KeyboardArrowDownRounded as MenuIcon,
+    ShortcutRounded as ForwardIcon,
+} from '@mui/icons-material';
+import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import React, { memo } from 'react';
 import moment from 'moment';
 import { lightBlue, orange } from '../../constants/color';
@@ -9,7 +15,32 @@ import RenderAttachment from './RenderAttachment';
 const BIG = "18px";
 const SMALL = "6px";
 
-const MessageComponent = ({ message, user, showSender = false, isFirst = true, isLast = true, onOpenMenu }) => {
+// ✓ sent, ✓✓ seen (in a group, once everyone who was there has seen it)
+const ReadTicks = ({ seenBy = 0, seenTotal = 0, isGroup, onColor }) => {
+    const seen = seenTotal > 0 && seenBy >= seenTotal;
+    const Icon = seen ? SeenIcon : SentIcon;
+    const label = isGroup && seenTotal > 0 ? `Seen by ${seenBy} of ${seenTotal}` : seen ? "Seen" : "Sent";
+    return (
+        <Tooltip title={label} placement="top" disableInteractive>
+            <Icon
+                aria-label={label}
+                sx={{
+                    fontSize: 15,
+                    ml: 0.4,
+                    verticalAlign: "-3px",
+                    // On the orange bubble the tick shape carries the meaning; elsewhere seen is blue
+                    color: onColor ? "#fff" : seen ? lightBlue : "inherit",
+                    opacity: onColor && !seen ? 0.75 : 1,
+                }}
+            />
+        </Tooltip>
+    );
+};
+
+const MessageComponent = ({
+    message, user, showSender = false, isFirst = true, isLast = true, onOpenMenu,
+    isGroup = false, seenBy, seenTotal,
+}) => {
     const { sender, content, attachments = [], created_at, system, forwarded, edited_at, deleted_at } = message;
 
     if (system) {
@@ -166,6 +197,9 @@ const MessageComponent = ({ message, user, showSender = false, isFirst = true, i
                         }}
                     >
                         {edited_at && !deleted ? `edited · ${time}` : time}
+                        {mine && !deleted && seenTotal !== undefined && (
+                            <ReadTicks seenBy={seenBy} seenTotal={seenTotal} isGroup={isGroup} onColor={onColor} />
+                        )}
                     </Typography>
                 </Box>
             </Box>

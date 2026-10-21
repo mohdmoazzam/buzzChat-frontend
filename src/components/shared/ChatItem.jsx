@@ -58,11 +58,11 @@ const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
 };
 
 const ChatItem = ({
-  avatar = [], name, id, groupChat = false, sameSender, isOnline, newMessageAlert, lastMessage,
+  avatar = [], name, id, groupChat = false, sameSender, isOnline, unreadCount = 0, lastMessage,
   handleDeleteChat, onSelect,
 }) => {
   const myId = useSelector((state) => state.auth.user?.id);
-  const unread = newMessageAlert?.count || 0;
+  const unread = unreadCount || 0;
   const time = formatChatTime(lastMessage?.created_at);
 
   return (
