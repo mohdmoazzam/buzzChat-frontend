@@ -7,6 +7,9 @@ import {
   ContentCopyRounded as CopyIcon,
   DeleteOutlineRounded as DeleteIcon,
   EditRounded as EditIcon,
+  ExitToAppRounded as LeaveIcon,
+  InfoOutlined as InfoIcon,
+  MoreVertRounded as MoreIcon,
   SendRounded as SendIcon,
   ShortcutRounded as ForwardIcon,
 } from "@mui/icons-material";
@@ -21,6 +24,7 @@ import { useDispatch, useSelector } from "react-redux";
 import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
 import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
+import GroupInfoPanel, { useGroupActions, useGroupProfiles } from "../components/specific/GroupInfo";
 import AppLayout from "../components/layout/AppLayout";
 import MessageComponent from "../components/shared/MessageComponent";
 import AvatarCard from "../components/shared/AvatarCard";
@@ -53,7 +57,21 @@ const dayLabel = (date) => {
   return d.isSame(moment(), "year") ? d.format("ddd, D MMM") : d.format("D MMM YYYY");
 };
 
-const Chat = ({ chatId, chat, isOnline }) => {
+// Group header text: "Ravi is typing…", "Ravi and Amit are typing…", "Ravi and 2 others are typing…"
+const typingLabel = (names) => {
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return `${names[0]} and ${names.length - 1} others are typing…`;
+};
+
+// The typing map without one person (same object when they weren't in it, so nothing re-renders)
+const withoutTypist = (typists, userId) => {
+  if (!userId || !(userId in typists)) return typists;
+  const { [userId]: _removed, ...rest } = typists;
+  return rest;
+};
+
+const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const { user } = useSelector((state) => state.auth);
   const { isFileMenu, uploadingLoader } = useSelector((state) => state.misc);
   const dispatch = useDispatch();
@@ -71,7 +89,12 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const [page, setPage] = useState(1);
   const [fileMenuAnchor, setFileMenuAnchor] = useState(null);
   const [iamTyping, setIamTyping] = useState(false);
-  const [userTyping, setUserTyping] = useState(false);
+  // Who else is typing here: { [user_id]: first_name } (groups can have several at once)
+  const [typingUsers, setTypingUsers] = useState({});
+  const [groupInfoOpen, setGroupInfoOpen] = useState(false);
+  const [groupMenuAnchor, setGroupMenuAnchor] = useState(null);
+  const typingNames = Object.values(typingUsers);
+  const userTyping = typingNames.length > 0;
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
   // Message actions: the open menu ({ message, anchorEl | position }), and what it started
@@ -109,6 +132,11 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const members = chatDetails?.data?.chat?.members;
   const isGroup = chat?.group_chat ?? chatDetails?.data?.chat?.group_chat;
+
+  // Group info and leave/delete: details carry creator_id and member ids; the list item has the avatars
+  const groupChat = isGroup && chatDetails.data?.chat ? { ...chatDetails.data.chat, avatar: chat?.avatar } : null;
+  const groupProfiles = useGroupProfiles(chatId, !!isGroup);
+  const groupActions = useGroupActions({ chatId, chat: groupChat, currentUserId: user.id, profiles: groupProfiles.profiles });
 
   const errors = [
     { isError: chatDetails.isError, error: chatDetails.error },
@@ -282,7 +310,9 @@ const Chat = ({ chatId, chat, isOnline }) => {
       setMessage("");
       setOldMessages([]);
       setPage(1);
-      setUserTyping(false);
+      setTypingUsers({});
+      setGroupInfoOpen(false);
+      setGroupMenuAnchor(null);
       setUnseenCount(0);
       setActionMenu(null);
       setEditing(null);
@@ -370,6 +400,8 @@ const Chat = ({ chatId, chat, isOnline }) => {
       setMessages((prev) => [...prev, data.message]);
       // Seen as it arrives (sending my own already counts as read on the server)
       if (data.message?.sender?.id !== user.id) markRead();
+      // Their message is in, so they've stopped typing even if STOP_TYPING went missing
+      setTypingUsers((prev) => withoutTypist(prev, data.message?.sender?.id));
     },
     [chatId, markRead, user.id]
   );
@@ -391,8 +423,8 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const startTypingListener = useCallback(
     (data) => {
-      if (data.chat_id !== chatId) return;
-      setUserTyping(true);
+      if (data.chat_id !== chatId || !data.user_id) return;
+      setTypingUsers((prev) => ({ ...prev, [data.user_id]: data.first_name || "Someone" }));
     },
     [chatId]
   );
@@ -400,7 +432,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const stopTypingListener = useCallback(
     (data) => {
       if (data.chat_id !== chatId) return;
-      setUserTyping(false);
+      setTypingUsers((prev) => withoutTypist(prev, data.user_id));
     },
     [chatId]
   );
@@ -467,7 +499,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const canSend = message.trim().length > 0;
 
   const subtitle = userTyping
-    ? "typing…"
+    ? isGroup ? typingLabel(typingNames) : "typing…"
     : isGroup
       ? `${(members?.length ?? 0)} members`
       : isOnline ? "Online" : "Offline";
@@ -550,16 +582,52 @@ const Chat = ({ chatId, chat, isOnline }) => {
         </IconButton>
         {chat ? (
           <>
-            <AvatarCard avatar={chat.avatar} size={40} />
-            <Stack sx={{ minWidth: 0 }}>
-              <Typography fontWeight={600} noWrap>{chat.name}</Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: userTyping || (!isGroup && isOnline) ? "#16a34a" : "text.secondary", fontWeight: 500 }}
-              >
-                {subtitle}
-              </Typography>
+            {/* In groups, the name opens Group info (members, leave) */}
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1.5}
+              {...(isGroup && {
+                component: "button",
+                type: "button",
+                onClick: () => setGroupInfoOpen(true),
+                "aria-label": "Group info",
+              })}
+              sx={{
+                minWidth: 0,
+                flex: 1,
+                border: "none",
+                background: "none",
+                p: 0,
+                font: "inherit",
+                color: "inherit",
+                textAlign: "left",
+                cursor: isGroup ? "pointer" : "default",
+              }}
+            >
+              <AvatarCard avatar={chat.avatar} size={40} />
+              <Stack sx={{ minWidth: 0 }}>
+                <Typography fontWeight={600} noWrap>{chat.name}</Typography>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{ color: userTyping || (!isGroup && isOnline) ? "#16a34a" : "text.secondary", fontWeight: 500 }}
+                >
+                  {subtitle}
+                </Typography>
+              </Stack>
             </Stack>
+            {isGroup && (
+              <Tooltip title="Group options">
+                <IconButton
+                  onClick={(e) => setGroupMenuAnchor(e.currentTarget)}
+                  aria-label="Group options"
+                  aria-haspopup="menu"
+                >
+                  <MoreIcon />
+                </IconButton>
+              </Tooltip>
+            )}
           </>
         ) : (
           <>
@@ -799,6 +867,53 @@ const Chat = ({ chatId, chat, isOnline }) => {
         chatId={chatId}
         message={forwardTarget}
       />
+
+      {isGroup && (
+        <>
+          <Menu
+            anchorEl={groupMenuAnchor}
+            open={!!groupMenuAnchor}
+            onClose={() => setGroupMenuAnchor(null)}
+            anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+            transformOrigin={{ vertical: "top", horizontal: "right" }}
+            slotProps={{ paper: { sx: { borderRadius: "12px", minWidth: 200 } } }}
+          >
+            <MenuItem onClick={() => { setGroupMenuAnchor(null); setGroupInfoOpen(true); }}>
+              <ListItemIcon><InfoIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Group info</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => { setGroupMenuAnchor(null); groupActions.requestLeave(); }}
+              sx={{ color: groupActions.canLeave ? "error.main" : "text.disabled" }}
+            >
+              <ListItemIcon sx={{ color: "inherit" }}><LeaveIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Leave group</ListItemText>
+            </MenuItem>
+            {groupActions.isAdmin && (
+              <MenuItem
+                onClick={() => { setGroupMenuAnchor(null); groupActions.requestDelete(); }}
+                sx={{ color: "error.main" }}
+              >
+                <ListItemIcon sx={{ color: "inherit" }}><DeleteIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>Delete group</ListItemText>
+              </MenuItem>
+            )}
+          </Menu>
+
+          <GroupInfoPanel
+            open={groupInfoOpen}
+            onClose={() => setGroupInfoOpen(false)}
+            chatId={chatId}
+            chat={groupChat}
+            currentUserId={user.id}
+            onlineUsers={onlineUsers}
+            actions={groupActions}
+            profiles={groupProfiles.profiles}
+            isLoading={groupProfiles.isLoading}
+          />
+          {groupActions.dialogs}
+        </>
+      )}
     </>
   );
 };

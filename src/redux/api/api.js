@@ -5,6 +5,9 @@ import { userNotExists } from "../reducers/auth";
 
 export const CHAT_PAGE_SIZE = 20;
 
+// Provided by the chat and group lists (alongside "Chat"), so a mutation can refresh just those
+const CHAT_LISTS = { type: "Chat", id: "LIST" };
+
 const rawBaseQuery = fetchBaseQuery({
     baseUrl: `${server}/api/v1/`,
     prepareHeaders: (headers, { getState }) => {
@@ -53,7 +56,7 @@ const api = createApi({
                 currentArg?.order !== previousArg?.order ||
                 currentArg?.search !== previousArg?.search,
             keepUnusedDataFor: 0,
-            providesTags: ["Chat"],
+            providesTags: ["Chat", CHAT_LISTS],
         }),
 
         // Unread messages across all chats (tab title); refreshed on NEW_MESSAGE_ALERT / MESSAGES_READ
@@ -206,7 +209,7 @@ const api = createApi({
                 credentials: "include"
             }),
             keepUnusedDataFor: 0,
-            providesTags: ["Chat"],
+            providesTags: ["Chat", CHAT_LISTS],
         }),
 
         availableFriends: builder.query({
@@ -268,7 +271,8 @@ const api = createApi({
                 method: "DELETE",
                 credentials: "include"
             }),
-            invalidatesTags: ["Chat"]
+            // Only the lists: refetching the deleted chat would fail and toast "not found"
+            invalidatesTags: [CHAT_LISTS]
         }),
 
         leaveGroup: builder.mutation({
@@ -277,7 +281,8 @@ const api = createApi({
                 method: "DELETE",
                 credentials: "include"
             }),
-            invalidatesTags: ["Chat"]
+            // Only the lists: refetching the group just left would fail and toast "not found"
+            invalidatesTags: [CHAT_LISTS]
         }),
 
         checkUsername: builder.query({

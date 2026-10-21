@@ -263,6 +263,7 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (Wrap
                   chatId={chatId}
                   chat={currentChat}
                   isOnline={isCurrentChatOnline}
+                  onlineUsers={onlineUsers}
                 />
               </Box>
             </Box>
