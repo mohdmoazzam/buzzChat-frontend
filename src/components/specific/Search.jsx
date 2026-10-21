@@ -29,7 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
 import { fullName, transformImage } from "../../lib/features";
 import { useLazySearchUserQuery, useSendFriendRequestMutation, PAGE_SIZE } from "../../redux/api/api";
-import { setIsSearch } from "../../redux/reducers/misc";
+import { setIsSearch, setProfileUserId } from "../../redux/reducers/misc";
 
 
 const Search = () => {
@@ -225,6 +225,7 @@ const Search = () => {
                 onAdd={() => addFriendHandler(user)}
                 onRespond={openNotifications}
                 onMessage={() => openChat(user.chat_id)}
+                onOpenProfile={() => dispatch(setProfileUserId(user.id))}
               />
             ))}
           </Stack>
@@ -241,7 +242,7 @@ const Search = () => {
   );
 };
 
-const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage }) => {
+const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage, onOpenProfile }) => {
   const { username, avatar, request_status: requestStatus } = user;
 
   let action;
@@ -296,8 +297,8 @@ const PersonRow = ({ user, isPending, onAdd, onRespond, onMessage }) => {
       spacing={1.5}
       sx={{ px: 1, py: 1.1, borderRadius: "12px", transition: "background-color 0.15s", "&:hover": { bgcolor: "#f8f8fa" } }}
     >
-      <Avatar src={transformImage(avatar?.url)} sx={{ width: 44, height: 44 }} />
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Avatar src={transformImage(avatar?.url)} onClick={onOpenProfile} sx={{ width: 44, height: 44, cursor: "pointer" }} />
+      <Box onClick={onOpenProfile} sx={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
         <Typography fontWeight={600} noWrap>{fullName(user)}</Typography>
         {requestStatus === "friend" ? (
           <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>

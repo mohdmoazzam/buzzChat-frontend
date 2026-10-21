@@ -9,6 +9,7 @@ import {
   EditRounded as EditIcon,
   ExitToAppRounded as LeaveIcon,
   InfoOutlined as InfoIcon,
+  TimerOutlined as TimerIcon,
   ReplyRounded as ReplyIcon,
   MoreVertRounded as MoreIcon,
   SendRounded as SendIcon,
@@ -26,6 +27,10 @@ import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
 import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
 import GroupInfoPanel, { useGroupActions } from "../components/specific/GroupInfo";
+import DisappearingDialog, { disappearingLabel } from "../components/dialogs/DisappearingDialog";
+
+// The chat details say whether it's a group
+const isGroupChat = (details) => !!details?.group_chat;
 import AppLayout from "../components/layout/AppLayout";
 import MessageComponent, { replySnippet } from "../components/shared/MessageComponent";
 import { fullName } from "../lib/features";
@@ -40,7 +45,7 @@ import api, {
   useGetChatMessagesQuery,
 } from "../redux/api/api";
 import { getSocket } from "../socket";
-import { setIsFileMenu } from "../redux/reducers/misc";
+import { setIsFileMenu, setProfileUserId } from "../redux/reducers/misc";
 import { TypingLoader } from "../components/layout/Loaders";
 import { useNavigate } from "react-router-dom";
 
@@ -101,6 +106,9 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const [typingUsers, setTypingUsers] = useState({});
   const [groupInfoOpen, setGroupInfoOpen] = useState(false);
   const [groupMenuAnchor, setGroupMenuAnchor] = useState(null);
+  const [disappearingOpen, setDisappearingOpen] = useState(false);
+  // Ticks while expiring messages are on screen, so they vanish on time between cleanup runs
+  const [now, setNow] = useState(() => Date.now());
   const typingNames = Object.values(typingUsers);
   const userTyping = typingNames.length > 0;
   const [isNearBottom, setIsNearBottom] = useState(true);
@@ -154,6 +162,9 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   );
 
   const details = chatDetails.currentData?.chat;
+  const disappearingSeconds = details?.disappearing_seconds ?? null;
+  // 1:1: either person; groups: the admin
+  const canSetDisappearing = !!details && (!isGroupChat(details) || details.creator_id === user.id);
   const members = details?.members;
   const isGroup = chat?.group_chat ?? details?.group_chat;
 
@@ -255,6 +266,9 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     setReplyingTo(msg);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+
+  // A sender's name in a group opens their profile
+  const openProfile = useCallback((userId) => dispatch(setProfileUserId(userId)), [dispatch]);
 
   // Scrolls to the quoted message and flashes it; older ones may not be loaded yet
   const jumpToMessage = useCallback((messageId) => {
@@ -532,7 +546,31 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     [chatId, replaceMessage]
   );
 
+  const expiredListener = useCallback(
+    ({ chat_id: expiredChatId, message_ids: ids = [] } = {}) => {
+      if (expiredChatId !== chatId || !ids.length) return;
+      const gone = new Set(ids);
+      setMessages((list) => list.filter((msg) => !gone.has(msg.id)));
+      setOldMessages((list) => list.filter((msg) => !gone.has(msg.id)));
+    },
+    [chatId, setOldMessages]
+  );
+
+  const disappearingListener = useCallback(
+    ({ chat_id: changedChatId, seconds } = {}) => {
+      if (changedChatId !== chatId) return;
+      dispatch(
+        api.util.updateQueryData("getChatDetails", { chatId }, (draft) => {
+          if (draft?.chat) draft.chat.disappearing_seconds = seconds ?? null;
+        })
+      );
+    },
+    [chatId, dispatch]
+  );
+
   const eventHandler = {
+    MESSAGES_EXPIRED: expiredListener,
+    DISAPPEARING_UPDATED: disappearingListener,
     NEW_MESSAGE: newMessagesListener,
     MESSAGE_UPDATED: changedMessageListener,
     MESSAGE_DELETED: changedMessageListener,
@@ -550,10 +588,18 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const allMessages = useMemo(() => {
     const byId = new Map();
     [...oldMessages, ...messages].forEach((msg) => byId.set(msg.id, msg));
-    return [...byId.values()].sort(
+    // Disappearing messages leave the screen when they expire (the server deletes them within a minute)
+    return [...byId.values()].filter((msg) => !msg.expires_at || Date.parse(msg.expires_at) > now).sort(
       (a, b) => new Date(a.created_at) - new Date(b.created_at) || String(a.id).localeCompare(String(b.id))
     );
-  }, [oldMessages, messages]);
+  }, [oldMessages, messages, now]);
+
+  const hasExpiring = useMemo(() => [...oldMessages, ...messages].some((msg) => msg.expires_at), [oldMessages, messages]);
+  useEffect(() => {
+    if (!hasExpiring) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, [hasExpiring]);
   const canSend = message.trim().length > 0;
 
   const subtitle = userTyping
@@ -611,6 +657,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             seenTotal={seenTotal}
             onOpenMenu={openActionMenu}
             onJumpToReply={jumpToMessage}
+            onOpenProfile={openProfile}
           />
         </Fragment>
       );
@@ -646,12 +693,10 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
               direction="row"
               alignItems="center"
               spacing={1.5}
-              {...(isGroup && {
-                component: "button",
-                type: "button",
-                onClick: () => setGroupInfoOpen(true),
-                "aria-label": "Group info",
-              })}
+              component="button"
+              type="button"
+              onClick={() => (isGroup ? setGroupInfoOpen(true) : chat.members?.[0] && dispatch(setProfileUserId(chat.members[0])))}
+              aria-label={isGroup ? "Group info" : `View ${chat.name}'s profile`}
               sx={{
                 minWidth: 0,
                 flex: 1,
@@ -661,7 +706,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
                 font: "inherit",
                 color: "inherit",
                 textAlign: "left",
-                cursor: isGroup ? "pointer" : "default",
+                cursor: "pointer",
               }}
             >
               <AvatarCard avatar={chat.avatar} size={40} />
@@ -672,15 +717,18 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
                   noWrap
                   sx={{ color: userTyping || (!isGroup && isOnline) ? "#16a34a" : "text.secondary", fontWeight: 500 }}
                 >
+                  {disappearingSeconds && !userTyping && (
+                    <TimerIcon sx={{ fontSize: 13, verticalAlign: "-2px", mr: 0.5 }} aria-label={`Disappearing messages: ${disappearingLabel(disappearingSeconds)}`} />
+                  )}
                   {subtitle}
                 </Typography>
               </Stack>
             </Stack>
-            {isGroup && (
-              <Tooltip title="Group options">
+            {(isGroup || canSetDisappearing) && (
+              <Tooltip title={isGroup ? "Group options" : "Chat options"}>
                 <IconButton
                   onClick={(e) => setGroupMenuAnchor(e.currentTarget)}
-                  aria-label="Group options"
+                  aria-label={isGroup ? "Group options" : "Chat options"}
                   aria-haspopup="menu"
                 >
                   <MoreIcon />
@@ -751,6 +799,14 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
               >
                 Start of conversation
               </Typography>
+              {disappearingSeconds && (
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ alignSelf: "center", mb: 1.5, px: 1.5, py: 0.5, borderRadius: "999px", bgcolor: "rgba(38,148,171,0.1)", color: "#2694ab" }}>
+                  <TimerIcon sx={{ fontSize: 15 }} />
+                  <Typography variant="caption" fontWeight={600}>
+                    New messages disappear after {disappearingLabel(disappearingSeconds)}
+                  </Typography>
+                </Stack>
+              )}
               {renderMessages()}
             </>
           )}
@@ -1010,9 +1066,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         message={forwardTarget}
       />
 
-      {isGroup && (
-        <>
-          <Menu
+      <Menu
             anchorEl={groupMenuAnchor}
             open={!!groupMenuAnchor}
             onClose={() => setGroupMenuAnchor(null)}
@@ -1020,10 +1074,19 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             transformOrigin={{ vertical: "top", horizontal: "right" }}
             slotProps={{ paper: { sx: { borderRadius: "12px", minWidth: 200 } } }}
           >
-            <MenuItem onClick={() => { setGroupMenuAnchor(null); setGroupInfoOpen(true); }}>
-              <ListItemIcon><InfoIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>Group info</ListItemText>
-            </MenuItem>
+            {isGroup && (
+              <MenuItem onClick={() => { setGroupMenuAnchor(null); setGroupInfoOpen(true); }}>
+                <ListItemIcon><InfoIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>Group info</ListItemText>
+              </MenuItem>
+            )}
+            {canSetDisappearing && (
+              <MenuItem onClick={() => { setGroupMenuAnchor(null); setDisappearingOpen(true); }}>
+                <ListItemIcon><TimerIcon fontSize="small" /></ListItemIcon>
+                <ListItemText primary="Disappearing messages" secondary={disappearingSeconds ? disappearingLabel(disappearingSeconds) : "Off"} />
+              </MenuItem>
+            )}
+            {isGroup && (
             <MenuItem
               onClick={() => { setGroupMenuAnchor(null); groupActions.requestLeave(); }}
               sx={{ color: groupActions.canLeave ? "error.main" : "text.disabled" }}
@@ -1031,7 +1094,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
               <ListItemIcon sx={{ color: "inherit" }}><LeaveIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Leave group</ListItemText>
             </MenuItem>
-            {groupActions.isAdmin && (
+            )}
+            {isGroup && groupActions.isAdmin && (
               <MenuItem
                 onClick={() => { setGroupMenuAnchor(null); groupActions.requestDelete(); }}
                 sx={{ color: "error.main" }}
@@ -1042,6 +1106,16 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             )}
           </Menu>
 
+      <DisappearingDialog
+        open={disappearingOpen}
+        onClose={() => setDisappearingOpen(false)}
+        chatId={chatId}
+        current={disappearingSeconds}
+        isGroup={!!isGroup}
+      />
+
+      {isGroup && (
+        <>
           <GroupInfoPanel
             open={groupInfoOpen}
             onClose={() => setGroupInfoOpen(false)}

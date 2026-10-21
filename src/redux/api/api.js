@@ -90,6 +90,12 @@ const api = createApi({
             keepUnusedDataFor: 0,
         }),
 
+        // Someone's public profile with how they relate to you and the groups you share
+        getUserProfile: builder.query({
+            query: (userId) => ({ url: `user/profile/${userId}`, credentials: "include" }),
+            keepUnusedDataFor: 0,
+        }),
+
         sendFriendRequest: builder.mutation({
             query: (data) => ({
                 url: "user/friend-requests",
@@ -130,6 +136,11 @@ const api = createApi({
                 credentials: "include"
             }),
             providesTags: ["Activity"],
+        }),
+
+        // Disappearing messages: { chatId, seconds } (null = off); the chat's details carry the timer
+        setDisappearing: builder.mutation({
+            query: ({ chatId, seconds }) => ({ url: `chat/${chatId}/disappearing`, method: "PUT", credentials: "include", body: { seconds } }),
         }),
 
         // Delete my account: email the confirmation code, then delete with { otp }
@@ -428,6 +439,7 @@ export const {
     useMyChatsQuery,
     useUnreadTotalQuery,
     useLazySearchUserQuery,
+    useGetUserProfileQuery,
     useSendFriendRequestMutation,
     useGetNotificationsQuery,
     useAcceptFriendRequestMutation,
@@ -436,6 +448,7 @@ export const {
     useMarkAllActivityReadMutation,
     useDeleteNotificationMutation,
     useChangePasswordMutation,
+    useSetDisappearingMutation,
     useSendDeleteAccountCodeMutation,
     useDeleteAccountMutation,
     useClearNotificationsMutation,

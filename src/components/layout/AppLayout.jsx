@@ -11,6 +11,7 @@ import {
 } from "../../redux/reducers/misc";
 import { getSocket } from "../../socket";
 import DeleteChatMenu from "../dialogs/DeleteChatMenu";
+import UserProfileDialog from "../specific/UserProfileDialog";
 import Title from "../shared/Title";
 import ChatList from "../specific/ChatList";
 import SettingsNav from "../specific/SettingsNav";
@@ -190,6 +191,8 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats", mobileHeader = 
       NEW_REQUEST: newRequestAlertListener,
       NEW_NOTIFICATION: newNotificationListener,
       REFETCH_CHATS: refetchListener,
+      // Disappearing messages: a chat's latest message may be gone, so its preview needs refreshing
+      MESSAGES_EXPIRED: reloadFirstPage,
       ONLINE_USERS: onlineUsersListener,
     };
 
@@ -289,6 +292,8 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats", mobileHeader = 
             <SettingsNav onSelect={handleMobileClose} />
           </Drawer>
         )}
+
+        <UserProfileDialog />
 
         <DeleteChatMenu
           dispatch={dispatch}

@@ -10,6 +10,8 @@ const initialState = {
     isDeleteMenu: false,
     uploadingLoader: false,
     isEditProfile: false,
+    // The user whose profile dialog is open (UserProfileDialog), or null
+    profileUserId: null,
     selectedDeleteChat: {
         chatId: "",
         groupChat: false
@@ -49,6 +51,9 @@ const miscSlice = createSlice({
         },
         setIsEditProfile: (state, action) => {
             state.isEditProfile = action.payload;
+        },
+        setProfileUserId: (state, action) => {
+            state.profileUserId = action.payload;
         }
     }
 });
@@ -65,5 +70,6 @@ export const {
     setIsDeleteMenu,
     setUploadingLoader,
     setSelectedDeleteChat,
-    setIsEditProfile
+    setIsEditProfile,
+    setProfileUserId
 } = miscSlice.actions;
