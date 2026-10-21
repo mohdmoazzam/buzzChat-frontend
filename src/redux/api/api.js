@@ -124,6 +124,45 @@ const api = createApi({
             keepUnusedDataFor: 0,
         }),
 
+        // { chatId, messageId, content }
+        editMessage: builder.mutation({
+            query: ({ chatId, messageId, content }) => ({
+                url: `chat/${chatId}/messages/${messageId}`,
+                method: "PATCH",
+                credentials: "include",
+                body: { content }
+            }),
+        }),
+
+        // Deletes for everyone
+        deleteMessage: builder.mutation({
+            query: ({ chatId, messageId }) => ({
+                url: `chat/${chatId}/messages/${messageId}`,
+                method: "DELETE",
+                credentials: "include"
+            }),
+        }),
+
+        // { chatId, messageId, chat_ids }
+        forwardMessage: builder.mutation({
+            query: ({ chatId, messageId, chat_ids }) => ({
+                url: `chat/${chatId}/messages/${messageId}/forward`,
+                method: "POST",
+                credentials: "include",
+                body: { chat_ids }
+            }),
+        }),
+
+        // Chats to forward to: its own cache, so it doesn't reset the merged chat list
+        forwardTargets: builder.query({
+            query: (search = "") => ({
+                url: "chat",
+                params: { page: 1, take: 30, order_by: "updated_at", order: "desc", ...(search ? { search } : {}) },
+                credentials: "include"
+            }),
+            keepUnusedDataFor: 0,
+        }),
+
         myGroups: builder.query({
             query: () => ({
                 url: "chat/groups",
@@ -235,6 +274,10 @@ export const {
     useGetChatMessagesQuery,
     useSendAttachmentsMutation,
     useUploadAssetsMutation,
+    useEditMessageMutation,
+    useDeleteMessageMutation,
+    useForwardMessageMutation,
+    useForwardTargetsQuery,
     useMyGroupsQuery,
     useAvailableFriendsQuery,
     useNewGroupMutation,

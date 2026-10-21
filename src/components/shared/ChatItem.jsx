@@ -1,5 +1,6 @@
 import {
   AudiotrackRounded as AudioIcon,
+  BlockRounded as BlockIcon,
   DescriptionRounded as FileIcon,
   ImageRounded as ImageIcon,
   VideocamRounded as VideoIcon,
@@ -27,6 +28,17 @@ const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
   }
 
   const mine = !!myId && lastMessage.sender?.id === myId;
+  if (lastMessage.deleted_at) {
+    return (
+      <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0, fontStyle: "italic" }}>
+        <BlockIcon sx={{ fontSize: 15, flexShrink: 0, color: "text.disabled" }} />
+        <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          {mine ? "You deleted this message" : "This message was deleted"}
+        </Box>
+      </Box>
+    );
+  }
+
   const prefix = mine ? "You: " : groupChat ? `${lastMessage.sender?.first_name ?? "Deleted user"}: ` : "";
   const attachments = lastMessage.attachments ?? [];
 

@@ -26,6 +26,16 @@ const CHAT_ORDER_BY = "updated_at";
 const CHAT_ORDER = "desc";
 const SEARCH_DEBOUNCE_MS = 300;
 
+// A socket message in the shape of the chat list's last_message
+const toPreview = (message) => ({
+  id: message.id,
+  content: message.content ?? "",
+  deleted_at: message.deleted_at ?? null,
+  attachments: (message.attachments ?? []).map(({ url }) => ({ url })),
+  created_at: message.created_at,
+  sender: message.sender ?? null,
+});
+
 const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
   return function AppLayoutWrapper(props) {
     const socket = getSocket();
@@ -128,12 +138,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
           if (index === -1) return;
           found = true;
           const [chat] = draft.chats.splice(index, 1);
-          chat.last_message = {
-            content: message.content ?? "",
-            attachments: (message.attachments ?? []).map(({ url }) => ({ url })),
-            created_at: message.created_at,
-            sender: message.sender ?? null,
-          };
+          chat.last_message = toPreview(message);
           draft.chats.unshift(chat);
         })
       );
@@ -141,8 +146,22 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       if (!found) reloadFirstPage();
     }, [dispatch, reloadFirstPage]);
 
+    // An edited or deleted message: refresh the preview if it's the chat's latest one (order stays)
+    const changedMessageListener = useCallback(({ chat_id: messageChatId, message } = {}) => {
+      if (!messageChatId || !message) return;
+      dispatch(
+        api.util.updateQueryData("myChats", {}, (draft) => {
+          const chat = draft?.chats?.find((item) => item.id === messageChatId);
+          if (chat?.last_message?.id !== message.id) return;
+          chat.last_message = { ...toPreview(message), sender: message.sender ?? chat.last_message.sender };
+        })
+      );
+    }, [dispatch]);
+
     const eventHandler = {
       NEW_MESSAGE: chatPreviewListener,
+      MESSAGE_UPDATED: changedMessageListener,
+      MESSAGE_DELETED: changedMessageListener,
       NEW_MESSAGE_ALERT: newMessageAlertListener,
       NEW_REQUEST: newRequestAlertListener,
       REFETCH_CHATS: refetchListener,

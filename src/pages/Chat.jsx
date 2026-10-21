@@ -2,13 +2,25 @@ import {
   AddRounded as AttachIcon,
   ArrowBack as ArrowBackIcon,
   KeyboardArrowDownRounded as ArrowDownIcon,
+  CheckRounded as CheckIcon,
+  CloseRounded as CloseIcon,
+  ContentCopyRounded as CopyIcon,
+  DeleteOutlineRounded as DeleteIcon,
+  EditRounded as EditIcon,
   SendRounded as SendIcon,
+  ShortcutRounded as ForwardIcon,
 } from "@mui/icons-material";
-import { Box, CircularProgress, Fab, IconButton, InputBase, Skeleton, Stack, Tooltip, Typography, Zoom } from "@mui/material";
+import {
+  Box, CircularProgress, Fab, IconButton, InputBase, ListItemIcon, ListItemText, Menu, MenuItem, Skeleton, Stack, Tooltip,
+  Typography, Zoom,
+} from "@mui/material";
 import moment from "moment";
-import React, { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
+import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
 import FileMenu from "../components/dialogs/FileMenu";
+import ForwardDialog from "../components/dialogs/ForwardDialog";
 import AppLayout from "../components/layout/AppLayout";
 import MessageComponent from "../components/shared/MessageComponent";
 import AvatarCard from "../components/shared/AvatarCard";
@@ -16,6 +28,8 @@ import { orange } from "../constants/color";
 import { accentDark } from "../constants/theme";
 import { useErrors, useInfiniteScrollTop, useSocketsEvents } from "../hooks/hook";
 import {
+  useDeleteMessageMutation,
+  useEditMessageMutation,
   useGetChatDetailsQuery,
   useGetChatMessagesQuery,
 } from "../redux/api/api";
@@ -28,6 +42,8 @@ import { useNavigate } from "react-router-dom";
 // Messages from the same sender within this window are visually grouped
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 const NEAR_BOTTOM_PX = 160;
+// Same window as the server (MESSAGE_EDIT_WINDOW_MS)
+const EDIT_WINDOW_MS = 15 * 60 * 1000;
 
 const dayLabel = (date) => {
   const d = moment(date);
@@ -57,6 +73,19 @@ const Chat = ({ chatId, chat, isOnline }) => {
   const [userTyping, setUserTyping] = useState(false);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
+  // Message actions: the open menu ({ message, anchorEl | position }), and what it started
+  const [actionMenu, setActionMenu] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [forwardTarget, setForwardTarget] = useState(null);
+  // The unsent draft, put back after an edit
+  const draftBeforeEdit = useRef("");
+  // For socket listeners, which shouldn't re-subscribe on every edit
+  const editingRef = useRef(null);
+  editingRef.current = editing;
+
+  const [editMessage, { isLoading: isSavingEdit }] = useEditMessageMutation();
+  const [deleteMessage, { isLoading: isDeleting }] = useDeleteMessageMutation();
 
   const socket = getSocket();
 
@@ -101,17 +130,90 @@ const Chat = ({ chatId, chat, isOnline }) => {
     }
   };
 
+  // Swaps an edited/deleted message in place, wherever it's loaded
+  const replaceMessage = useCallback((updated) => {
+    const swap = (list) => list.map((msg) => (msg.id === updated.id ? { ...msg, ...updated } : msg));
+    setMessages(swap);
+    setOldMessages(swap);
+  }, [setOldMessages]);
+
+  const startEditing = (msg) => {
+    draftBeforeEdit.current = message;
+    setEditing(msg);
+    setMessage(msg.content);
+    stopTyping();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const stopEditing = () => {
+    setEditing(null);
+    setMessage(draftBeforeEdit.current);
+    draftBeforeEdit.current = "";
+    inputRef.current?.focus();
+  };
+
+  const saveEdit = async (text) => {
+    if (text === editing.content) return stopEditing();
+    const res = await editMessage({ chatId, messageId: editing.id, content: text });
+    if (res.data) {
+      replaceMessage(res.data.message);
+      stopEditing();
+    } else {
+      toast.error(res.error?.data?.message || "Something went wrong");
+    }
+  };
+
   const submitHandler = (e) => {
     e?.preventDefault();
     const text = message.trim();
     if (!text) return;
+    if (editing) {
+      if (!isSavingEdit) saveEdit(text);
+      return;
+    }
     socket.emit("NEW_MESSAGE", { chat_id: chatId, message: text });
     setMessage("");
     stopTyping();
     inputRef.current?.focus();
   };
 
+  const openActionMenu = useCallback((menu) => setActionMenu(menu), []);
+  const closeActionMenu = () => setActionMenu(null);
+
+  // What the open menu offers for its message
+  const menuMessage = actionMenu?.message;
+  const menuIsMine = !!menuMessage && menuMessage.sender?.id === user.id;
+  const canCopy = !!menuMessage?.content;
+  const canEdit = menuIsMine && !!menuMessage?.content &&
+    Date.now() - new Date(menuMessage.created_at).getTime() < EDIT_WINDOW_MS;
+
+  const copyHandler = async () => {
+    closeActionMenu();
+    try {
+      await navigator.clipboard.writeText(menuMessage.content);
+      toast.success("Copied");
+    } catch {
+      toast.error("Couldn't copy the message");
+    }
+  };
+
+  const deleteHandler = async () => {
+    const res = await deleteMessage({ chatId, messageId: deleteTarget.id });
+    if (res.data) {
+      replaceMessage(res.data.message);
+      if (editing?.id === deleteTarget.id) stopEditing();
+      setDeleteTarget(null);
+    } else {
+      toast.error(res.error?.data?.message || "Something went wrong");
+    }
+  };
+
   const keyDownHandler = (e) => {
+    if (e.key === "Escape" && editing) {
+      e.preventDefault();
+      stopEditing();
+      return;
+    }
     // Enter sends, Shift+Enter adds a new line
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -131,6 +233,11 @@ const Chat = ({ chatId, chat, isOnline }) => {
       setPage(1);
       setUserTyping(false);
       setUnseenCount(0);
+      setActionMenu(null);
+      setEditing(null);
+      setDeleteTarget(null);
+      setForwardTarget(null);
+      draftBeforeEdit.current = "";
       socket.emit("CHAT_LEAVED");
     };
   }, [chatId]);
@@ -166,7 +273,8 @@ const Chat = ({ chatId, chat, isOnline }) => {
     const mine = last?.sender?.id === user.id;
     if (isNearBottom || mine) scrollToBottom();
     else setUnseenCount((n) => n + 1);
-  }, [messages]);
+    // Only new arrivals, not edits/deletes swapped in place
+  }, [messages.length]);
 
   useEffect(() => {
     if (userTyping && isNearBottom) scrollToBottom();
@@ -189,6 +297,8 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   const messageChangeHandler = (e) => {
     setMessage(e.target.value);
+    // Editing an old message isn't "typing" for the other side
+    if (editing) return;
     if (!iamTyping) {
       socket.emit("START_TYPING", { chat_id: chatId });
       setIamTyping(true);
@@ -244,8 +354,29 @@ const Chat = ({ chatId, chat, isOnline }) => {
     setMessages((prev) => [...prev, messageForAlert]);
   }, [chatId]);
 
+  // Edited or deleted (by anyone, including me on another device)
+  const changedMessageListener = useCallback(
+    (data) => {
+      if (data.chat_id !== chatId || !data.message) return;
+      replaceMessage(data.message);
+      if (data.message.deleted_at) {
+        // Close anything still pointing at it
+        setActionMenu((menu) => (menu?.message.id === data.message.id ? null : menu));
+        setForwardTarget((target) => (target?.id === data.message.id ? null : target));
+        if (editingRef.current?.id === data.message.id) {
+          setEditing(null);
+          setMessage(draftBeforeEdit.current);
+          draftBeforeEdit.current = "";
+        }
+      }
+    },
+    [chatId, replaceMessage]
+  );
+
   const eventHandler = {
     NEW_MESSAGE: newMessagesListener,
+    MESSAGE_UPDATED: changedMessageListener,
+    MESSAGE_DELETED: changedMessageListener,
     START_TYPING: startTypingListener,
     STOP_TYPING: stopTypingListener,
     ALERT: alertListener,
@@ -255,7 +386,14 @@ const Chat = ({ chatId, chat, isOnline }) => {
 
   useErrors(errors);
 
-  const allMessages = [...oldMessages, ...messages];
+  // A refetch (e.g. on tab focus) can return messages that already arrived live: keep one of each, in time order
+  const allMessages = useMemo(() => {
+    const byId = new Map();
+    [...oldMessages, ...messages].forEach((msg) => byId.set(msg.id, msg));
+    return [...byId.values()].sort(
+      (a, b) => new Date(a.created_at) - new Date(b.created_at) || String(a.id).localeCompare(String(b.id))
+    );
+  }, [oldMessages, messages]);
   const canSend = message.trim().length > 0;
 
   const subtitle = userTyping
@@ -298,6 +436,7 @@ const Chat = ({ chatId, chat, isOnline }) => {
             isFirst={isFirst || newDay}
             isLast={isLast}
             showSender={isGroup && (isFirst || newDay)}
+            onOpenMenu={openActionMenu}
           />
         </Fragment>
       );
@@ -437,6 +576,23 @@ const Chat = ({ chatId, chat, isOnline }) => {
           borderColor: "divider",
         }}
       >
+        {editing && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mb: 1, ml: { xs: 0, sm: "50px" }, pl: 1.5, pr: 0.5, py: 0.5, borderLeft: `3px solid ${orange}`, bgcolor: "#f9f9fb", borderRadius: "8px" }}
+          >
+            <EditIcon sx={{ fontSize: 18, color: orange }} />
+            <Stack sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="caption" fontWeight={600} sx={{ color: orange }}>Editing message</Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>{editing.content}</Typography>
+            </Stack>
+            <IconButton size="small" onClick={stopEditing} aria-label="Cancel editing">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        )}
         <Stack direction="row" alignItems="flex-end" spacing={1}>
           <Tooltip title={isFileMenu ? "" : uploadingLoader ? "Sending files…" : "Attach files"} disableInteractive>
             <span>
@@ -497,15 +653,69 @@ const Chat = ({ chatId, chat, isOnline }) => {
               "&:not(.Mui-disabled):active": { transform: "scale(0.92)" },
             }}
           >
-            <SendIcon sx={{ fontSize: 20, ml: "2px" }} />
+            {editing ? (
+              isSavingEdit ? <CircularProgress size={18} sx={{ color: "#fff" }} /> : <CheckIcon sx={{ fontSize: 22 }} />
+            ) : (
+              <SendIcon sx={{ fontSize: 20, ml: "2px" }} />
+            )}
           </IconButton>
         </Stack>
         <Typography variant="caption" color="text.disabled" sx={{ display: { xs: "none", md: "block" }, pl: "58px", pt: 0.5, fontSize: "0.7rem" }}>
-          Enter to send · Shift + Enter for a new line
+          {editing ? "Enter to save · Esc to cancel" : "Enter to send · Shift + Enter for a new line"}
         </Typography>
       </Box>
 
       <FileMenu anchorE1={fileMenuAnchor} chatId={chatId} />
+
+      {/* Message actions */}
+      <Menu
+        open={!!actionMenu}
+        onClose={closeActionMenu}
+        anchorEl={actionMenu?.anchorEl ?? null}
+        anchorReference={actionMenu?.position ? "anchorPosition" : "anchorEl"}
+        anchorPosition={actionMenu?.position}
+        PaperProps={{ sx: { borderRadius: "12px", minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" } }}
+      >
+        {canCopy && (
+          <MenuItem onClick={copyHandler}>
+            <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Copy</ListItemText>
+          </MenuItem>
+        )}
+        {canEdit && (
+          <MenuItem onClick={() => { closeActionMenu(); startEditing(menuMessage); }}>
+            <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Edit</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { closeActionMenu(); setForwardTarget(menuMessage); }}>
+          <ListItemIcon><ForwardIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Forward</ListItemText>
+        </MenuItem>
+        {menuIsMine && (
+          <MenuItem onClick={() => { closeActionMenu(); setDeleteTarget(menuMessage); }} sx={{ color: "error.main" }}>
+            <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
+            <ListItemText>Delete for everyone</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
+
+      <ConfirmDeleteDialog
+        open={!!deleteTarget}
+        handleClose={() => setDeleteTarget(null)}
+        deleteHandler={deleteHandler}
+        title="Delete for everyone?"
+        message="This message will be replaced with “This message was deleted” for everyone in this chat."
+        confirmLabel="Delete"
+        isLoading={isDeleting}
+      />
+
+      <ForwardDialog
+        open={!!forwardTarget}
+        handleClose={() => setForwardTarget(null)}
+        chatId={chatId}
+        message={forwardTarget}
+      />
     </>
   );
 };
