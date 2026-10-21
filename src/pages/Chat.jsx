@@ -87,9 +87,11 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
   // History page to load: null = the newest messages, then the cursor of the oldest one loaded.
-  // Kept with its chat, so opening another chat starts from its newest page in the same render
-  // (an effect resetting it would first request the new chat with the old chat's cursor)
+  // Kept with its chat and reset during render when another chat opens, so every chat (including
+  // one opened again later) starts from its newest page. An effect would reset it a render late,
+  // after a request with the old cursor: the previous chat's, or this chat's older page from last time.
   const [history, setHistory] = useState({ chatId, cursor: null });
+  if (history.chatId !== chatId) setHistory({ chatId, cursor: null });
   const historyCursor = history.chatId === chatId ? history.cursor : null;
   const [fileMenuAnchor, setFileMenuAnchor] = useState(null);
   const [iamTyping, setIamTyping] = useState(false);
