@@ -99,16 +99,23 @@ const useInfiniteScrollTop = (containerRef, hasMore, loadMore, newData) => {
         };
     }, [handleScroll, data]);
 
+    const loadedCount = useRef(0);
+    loadedCount.current = data.length;
+
     useEffect(() => {
+        if (!newData) return;
         const container = containerRef.current;
+        // Only an older page added above messages already on screen needs the position kept.
+        // A chat's first page lands at the bottom on its own; adjusting it too would scroll
+        // up a little, which counted as the user scrolling up and loaded a second page.
+        const prepending = loadedCount.current > 0;
         const prevScrollHeight = container?.scrollHeight ?? 0;
         const prevScrollTop = container?.scrollTop ?? 0;
-        if (newData) {
-            setData((oldData) => {
-                const seen = new Set(oldData.map((item) => item.id));
-                return [...newData.filter((item) => !seen.has(item.id)), ...oldData];
-            });
-        }
+        setData((oldData) => {
+            const seen = new Set(oldData.map((item) => item.id));
+            return [...newData.filter((item) => !seen.has(item.id)), ...oldData];
+        });
+        if (!prepending) return;
         requestAnimationFrame(() => {
             if (containerRef.current) {
                 containerRef.current.scrollTop = prevScrollTop + containerRef.current.scrollHeight - prevScrollHeight;

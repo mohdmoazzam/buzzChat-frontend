@@ -86,8 +86,11 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  // History page to load: null = the newest messages, then the cursor of the oldest one loaded
-  const [historyCursor, setHistoryCursor] = useState(null);
+  // History page to load: null = the newest messages, then the cursor of the oldest one loaded.
+  // Kept with its chat, so opening another chat starts from its newest page in the same render
+  // (an effect resetting it would first request the new chat with the old chat's cursor)
+  const [history, setHistory] = useState({ chatId, cursor: null });
+  const historyCursor = history.chatId === chatId ? history.cursor : null;
   const [fileMenuAnchor, setFileMenuAnchor] = useState(null);
   const [iamTyping, setIamTyping] = useState(false);
   // Who else is typing here: { [user_id]: first_name } (groups can have several at once)
@@ -122,27 +125,34 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
     { chatId, cursor: historyCursor },
     { skip: !chatId }
   );
-  const historyPagination = oldMessagesChunk.data?.pagination;
+  // currentData, not data: data keeps the previous chat's (or page's) result while the next one loads
+  const historyPage = oldMessagesChunk.currentData;
+  const historyPagination = historyPage?.pagination;
+  // This chat's newest messages haven't arrived yet (first open, or switched from another chat)
+  const isLoadingFirstPage = historyCursor === null && !historyPage && !oldMessagesChunk.isError;
   // An older page (not the first, and not a background refetch of one already shown) is on its way
-  const isLoadingOlder = historyCursor !== null && oldMessagesChunk.isFetching && !oldMessagesChunk.currentData;
+  const isLoadingOlder = historyCursor !== null && oldMessagesChunk.isFetching && !historyPage;
   const olderFailed = historyCursor !== null && oldMessagesChunk.isError && !oldMessagesChunk.isFetching;
   const reachedStart = !!historyPagination && !historyPagination.has_more;
   const loadOlderMessages = useCallback(() => {
-    if (!oldMessagesChunk.isFetching && historyPagination?.next_cursor) setHistoryCursor(historyPagination.next_cursor);
-  }, [oldMessagesChunk.isFetching, historyPagination]);
+    if (!oldMessagesChunk.isFetching && historyPagination?.next_cursor) {
+      setHistory({ chatId, cursor: historyPagination.next_cursor });
+    }
+  }, [oldMessagesChunk.isFetching, historyPagination, chatId]);
 
   const { data: oldMessages, setData: setOldMessages } = useInfiniteScrollTop(
     containerRef,
     !!historyPagination?.has_more,
     loadOlderMessages,
-    oldMessagesChunk.data?.messages
+    historyPage?.messages
   );
 
-  const members = chatDetails?.data?.chat?.members;
-  const isGroup = chat?.group_chat ?? chatDetails?.data?.chat?.group_chat;
+  const details = chatDetails.currentData?.chat;
+  const members = details?.members;
+  const isGroup = chat?.group_chat ?? details?.group_chat;
 
   // Group info and leave/delete: details carry creator_id and member ids; the list item has the avatars
-  const groupChat = isGroup && chatDetails.data?.chat ? { ...chatDetails.data.chat, avatar: chat?.avatar } : null;
+  const groupChat = isGroup && details ? { ...details, avatar: chat?.avatar } : null;
   const groupActions = useGroupActions({ chatId, chat: groupChat, currentUserId: user.id, panelOpen: groupInfoOpen });
 
   const errors = [
@@ -317,7 +327,6 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       setMessages([]);
       setMessage("");
       setOldMessages([]);
-      setHistoryCursor(null);
       setTypingUsers({});
       setGroupInfoOpen(false);
       setGroupMenuAnchor(null);
@@ -661,7 +670,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
           }}
         >
           <Box ref={contentRef} sx={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
-          {chatDetails.isLoading || oldMessagesChunk.isLoading ? (
+          {isLoadingFirstPage ? (
             <Stack spacing={1} sx={{ mt: "auto" }}>
               {[55, 35, 65, 30, 45].map((w, i) => (
                 <Skeleton
