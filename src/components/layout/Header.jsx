@@ -23,7 +23,7 @@ import {
   Typography,
 } from "@mui/material";
 import axios from "axios";
-import React, { Suspense, forwardRef, lazy, useRef, useState } from "react";
+import React, { Suspense, forwardRef, lazy, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate } from "react-router-dom";
@@ -36,17 +36,16 @@ import { useGetActivityQuery, useGetNotificationsQuery } from "../../redux/api/a
 import {
   setIsMobileMenu,
   setIsNewGroup,
-  setIsNotification,
   setIsSearch,
 } from "../../redux/reducers/misc";
 const SearchDialog = lazy(() => import("../specific/Search"));
-const NotificationDropdown = lazy(() => import("../specific/Notification"));
 const NewGroupDialog = lazy(() => import("../specific/NewGroup"));
 
-const Header = () => {
+// showMenu: the hamburger for the settings sections, on phones (settings pages only)
+const Header = ({ showMenu = false }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { isSearch, isNotification, isNewGroup } = useSelector(
+  const { isSearch, isNewGroup } = useSelector(
     (state) => state.misc
   );
   // Pending friend requests, from the server (refetched on NEW_REQUEST), so the badge survives a reload
@@ -57,7 +56,6 @@ const Header = () => {
   const { user, token } = useSelector((state) => state.auth);
   const socket = getSocket();
   const [accountAnchor, setAccountAnchor] = useState(null);
-  const bellRef = useRef(null);
 
   const handleMobile = () => {
     dispatch(setIsMobileMenu(true));
@@ -94,9 +92,8 @@ const Header = () => {
     toast.success("Logged out successfully");
   };
 
-  const openNotifications = () => {
-    dispatch(setIsNotification(true));
-  };
+  // Notifications are a page (phones and desktop), not a dropdown
+  const openNotifications = () => navigate("/notifications");
 
   return (
     <>
@@ -115,13 +112,16 @@ const Header = () => {
       >
         {/* Content lines up with the centered app width on wide screens */}
         <Box sx={{ width: "100%", maxWidth: 1440, mx: "auto", height: "100%", display: "flex", alignItems: "center", "@media (min-width: 1441px)": { px: 2 } }}>
-        <IconButton
-          onClick={handleMobile}
-          aria-label="Open menu"
-          sx={{ display: { xs: "inline-flex", sm: "none" }, mr: 0.5 }}
-        >
-          <MenuIcon />
-        </IconButton>
+        {/* Phones, settings pages only: opens the settings sections */}
+        {showMenu && (
+          <IconButton
+            onClick={handleMobile}
+            aria-label="Open settings menu"
+            sx={{ display: { xs: "inline-flex", sm: "none" }, mr: 0.5 }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
 
         <Stack
           component={Link}
@@ -154,7 +154,6 @@ const Header = () => {
 
         <Stack direction="row" alignItems="center" spacing={{ xs: 0, sm: 0.5 }}>
           <IconBtn
-            ref={bellRef}
             title="Notifications"
             icon={<NotificationsIcon />}
             onClick={openNotifications}
@@ -221,12 +220,6 @@ const Header = () => {
       {isSearch && (
         <Suspense fallback={<Backdrop open />}>
           <SearchDialog />
-        </Suspense>
-      )}
-
-      {isNotification && (
-        <Suspense fallback={null}>
-          <NotificationDropdown anchorEl={bellRef.current} />
         </Suspense>
       )}
 

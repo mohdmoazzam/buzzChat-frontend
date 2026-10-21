@@ -9,6 +9,7 @@ import {
   EditRounded as EditIcon,
   ExitToAppRounded as LeaveIcon,
   InfoOutlined as InfoIcon,
+  ReplyRounded as ReplyIcon,
   MoreVertRounded as MoreIcon,
   SendRounded as SendIcon,
   ShortcutRounded as ForwardIcon,
@@ -26,7 +27,8 @@ import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
 import GroupInfoPanel, { useGroupActions } from "../components/specific/GroupInfo";
 import AppLayout from "../components/layout/AppLayout";
-import MessageComponent from "../components/shared/MessageComponent";
+import MessageComponent, { replySnippet } from "../components/shared/MessageComponent";
+import { fullName } from "../lib/features";
 import AvatarCard from "../components/shared/AvatarCard";
 import { orange } from "../constants/color";
 import { accentDark } from "../constants/theme";
@@ -106,6 +108,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   // Message actions: the open menu ({ message, anchorEl | position }), and what it started
   const [actionMenu, setActionMenu] = useState(null);
   const [editing, setEditing] = useState(null);
+  // The message being replied to (shown above the composer until sent or cancelled)
+  const [replyingTo, setReplyingTo] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [forwardTarget, setForwardTarget] = useState(null);
   // How far each other member has read: { [userId]: { read, joined } } in ms, for the ticks
@@ -238,12 +242,33 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   }, [setOldMessages]);
 
   const startEditing = (msg) => {
+    setReplyingTo(null);
     draftBeforeEdit.current = message;
     setEditing(msg);
     setMessage(msg.content);
     stopTyping();
     requestAnimationFrame(() => inputRef.current?.focus());
   };
+
+  const startReply = (msg) => {
+    if (editing) stopEditing();
+    setReplyingTo(msg);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  // Scrolls to the quoted message and flashes it; older ones may not be loaded yet
+  const jumpToMessage = useCallback((messageId) => {
+    const target = containerRef.current?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!target) {
+      toast("That message is further up. Scroll up to load it.", { id: "reply-not-loaded" });
+      return;
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    target.animate?.(
+      [{ backgroundColor: "rgba(234,112,112,0.22)" }, { backgroundColor: "transparent" }],
+      { duration: 1400, easing: "ease-out" }
+    );
+  }, []);
 
   const stopEditing = () => {
     setEditing(null);
@@ -271,8 +296,15 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       if (!isSavingEdit) saveEdit(text);
       return;
     }
-    socket.emit("NEW_MESSAGE", { chat_id: chatId, message: text });
+    const replyTo = replyingTo;
+    socket.emit("NEW_MESSAGE", { chat_id: chatId, message: text, reply_to_id: replyTo?.id }, (ack) => {
+      if (ack?.ok) return;
+      toast.error(ack?.error || "Message not sent. Please try again.");
+      // Put the text back so nothing typed is lost
+      setMessage((current) => current || text);
+    });
     setMessage("");
+    setReplyingTo(null);
     stopTyping();
     inputRef.current?.focus();
   };
@@ -309,6 +341,11 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   };
 
   const keyDownHandler = (e) => {
+    if (e.key === "Escape" && replyingTo && !editing) {
+      e.preventDefault();
+      setReplyingTo(null);
+      return;
+    }
     if (e.key === "Escape" && editing) {
       e.preventDefault();
       stopEditing();
@@ -335,6 +372,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       setUnseenCount(0);
       setActionMenu(null);
       setEditing(null);
+      setReplyingTo(null);
       setDeleteTarget(null);
       setForwardTarget(null);
       setReceipts({});
@@ -483,6 +521,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         // Close anything still pointing at it
         setActionMenu((menu) => (menu?.message.id === data.message.id ? null : menu));
         setForwardTarget((target) => (target?.id === data.message.id ? null : target));
+        setReplyingTo((target) => (target?.id === data.message.id ? null : target));
         if (editingRef.current?.id === data.message.id) {
           setEditing(null);
           setMessage(draftBeforeEdit.current);
@@ -571,6 +610,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             seenBy={seenBy}
             seenTotal={seenTotal}
             onOpenMenu={openActionMenu}
+            onJumpToReply={jumpToMessage}
           />
         </Fragment>
       );
@@ -795,12 +835,35 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         sx={{
           flexShrink: 0,
           px: { xs: 1, sm: 2.5, md: 4 },
-          py: 1.25,
+          pt: 1.25,
+          // Clear of the iPhone home bar (needs viewport-fit=cover in index.html)
+          pb: "max(10px, env(safe-area-inset-bottom))",
           bgcolor: "#fff",
           borderTop: "1px solid",
           borderColor: "divider",
         }}
       >
+        {replyingTo && !editing && (
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ mb: 1, ml: { xs: 0, sm: "50px" }, pl: 1.5, pr: 0.5, py: 0.5, borderLeft: `3px solid ${orange}`, bgcolor: "#f9f9fb", borderRadius: "8px" }}
+          >
+            <ReplyIcon sx={{ fontSize: 18, color: orange }} />
+            <Stack sx={{ minWidth: 0, flex: 1 }}>
+              <Typography variant="caption" fontWeight={600} sx={{ color: orange }}>
+                Replying to {replyingTo.sender?.id === user.id ? "yourself" : fullName(replyingTo.sender)}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {replySnippet({ content: replyingTo.content, attachment: replyingTo.attachments?.[0] })}
+              </Typography>
+            </Stack>
+            <IconButton size="small" onClick={() => setReplyingTo(null)} aria-label="Cancel reply">
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Stack>
+        )}
         {editing && (
           <Stack
             direction="row"
@@ -854,7 +917,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
               px: 2,
               py: 1.1,
               minHeight: 42,
-              fontSize: "0.95rem",
+              // 16px on phones: iOS zooms the whole page into any smaller input on focus
+              fontSize: { xs: "1rem", sm: "0.95rem" },
               lineHeight: 1.4,
               border: "1px solid transparent",
               transition: "border-color 0.15s, background-color 0.15s",
@@ -890,7 +954,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         </Typography>
       </Box>
 
-      <FileMenu anchorE1={fileMenuAnchor} chatId={chatId} />
+      <FileMenu anchorE1={fileMenuAnchor} chatId={chatId} replyToId={replyingTo?.id} onSent={() => setReplyingTo(null)} />
 
       {/* Message actions */}
       <Menu
@@ -901,6 +965,10 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
         anchorPosition={actionMenu?.position}
         PaperProps={{ sx: { borderRadius: "12px", minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.12)" } }}
       >
+        <MenuItem onClick={() => { closeActionMenu(); startReply(menuMessage); }}>
+          <ListItemIcon><ReplyIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Reply</ListItemText>
+        </MenuItem>
         {canCopy && (
           <MenuItem onClick={copyHandler}>
             <ListItemIcon><CopyIcon fontSize="small" /></ListItemIcon>

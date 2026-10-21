@@ -33,7 +33,8 @@ const toPreview = (message) => ({
 });
 
 // sidebar: "chats" (the chat list) or "settings" (the settings sections)
-const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (WrappedComponent) => {
+// mobileHeader: false for pages with their own top bar (and back button) on phones
+const AppLayout = ({ showListOnMobile = true, sidebar = "chats", mobileHeader = true } = {}) => (WrappedComponent) => {
   return function AppLayoutWrapper(props) {
     const socket = getSocket();
     const dispatch = useDispatch();
@@ -221,7 +222,10 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (Wrap
         {/* Full-height app; on wide screens the app is a centered column
             on one continuous white page, edged by thin dividers */}
         <Box sx={{ height: "100dvh", display: "flex", flexDirection: "column", bgcolor: "#fff" }}>
-          <Header />
+          {/* Inside a chat (or a page with its own bar) on a phone, that header with its back button is the only bar */}
+          <Box sx={{ display: { xs: chatId || !mobileHeader ? "none" : "block", sm: "block" }, flexShrink: 0 }}>
+            <Header showMenu={isSettings} />
+          </Box>
 
           <Box sx={{ flex: 1, minHeight: 0, bgcolor: "#fff" }}>
           <Box
@@ -274,18 +278,17 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats" } = {}) => (Wrap
         </Box>
         </Box>
 
-        {/* Mobile drawer for chat list */}
-        <Drawer
-          open={isMobileMenu}
-          onClose={handleMobileClose}
-          PaperProps={{ sx: { width: "85vw", maxWidth: 360 } }}
-        >
-          {isSettings ? (
+        {/* Phones: the settings sections (the sidebar is hidden there). The chat list needs no drawer:
+            on a phone it's the home screen, which the logo and every back button lead to. */}
+        {isSettings && (
+          <Drawer
+            open={isMobileMenu}
+            onClose={handleMobileClose}
+            PaperProps={{ sx: { width: "85vw", maxWidth: 360 } }}
+          >
             <SettingsNav onSelect={handleMobileClose} />
-          ) : (
-            <ChatList {...chatListProps} onSelect={handleMobileClose} />
-          )}
-        </Drawer>
+          </Drawer>
+        )}
 
         <DeleteChatMenu
           dispatch={dispatch}

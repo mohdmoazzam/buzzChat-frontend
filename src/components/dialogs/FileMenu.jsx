@@ -21,7 +21,8 @@ const OPTIONS = [
   { key: "file", label: "Document", noun: ["file", "files"], accept: "*", Icon: FileIcon, color: "#3b82f6" },
 ];
 
-const FileMenu = ({ anchorE1, chatId }) => {
+// replyToId: the message these files reply to (from the composer's reply bar); onSent clears it
+const FileMenu = ({ anchorE1, chatId, replyToId, onSent }) => {
   const dispatch = useDispatch();
   const { isFileMenu } = useSelector((state) => state.misc);
   const inputRefs = useRef({});
@@ -66,7 +67,9 @@ const FileMenu = ({ anchorE1, chatId }) => {
       const response = await sendAttachments({
         chat_id: chatId,
         attachment_ids: uploaded.data.assets.map((asset) => asset.id),
+        reply_to_id: replyToId,
       });
+      if (response.data) onSent?.();
       if (!response.data) {
         toast.error(response.error?.data?.message || `Couldn't send ${noun}`);
       }

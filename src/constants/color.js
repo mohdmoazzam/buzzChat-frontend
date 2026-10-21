@@ -1,4 +1,6 @@
 export const orange = "#ea7070"
+// Your own message bubbles: a light tint of the brand colour with dark text (white on orange was hard to read)
+export const myBubble = "#fde4e1";
 export const grayColor = "rgba(247, 247, 247, 1)";
 export const lightBlue = "#2694ab";
 export const matBlack = "#1c1c1c";

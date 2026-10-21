@@ -16,7 +16,10 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Profile = lazy(() => import("./pages/Profile"));
 const EditProfile = lazy(() => import("./pages/EditProfile"));
 const Devices = lazy(() => import("./pages/Devices"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
+const DeleteAccount = lazy(() => import("./pages/DeleteAccount"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 
 // Old /groups links (including ?group=) now live under settings
 const GroupsRedirect = () => <Navigate to={`/settings/groups${useLocation().search}`} replace />;
@@ -60,10 +63,13 @@ const App = () => {
               <Route path='/' element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><Home /></ProtectRoute>} />
               <Route path='/chat/:chatId' element={<Chat />} />
               <Route path='/profile' element={<Profile />} />
+              <Route path='/notifications' element={<Notifications />} />
               <Route path='/settings' element={<Navigate to='/settings/profile' replace />} />
               <Route path='/settings/profile' element={<EditProfile />} />
+              <Route path='/settings/password' element={<ChangePassword />} />
               <Route path='/settings/devices' element={<Devices />} />
               <Route path='/settings/groups' element={<Group />} />
+              <Route path='/settings/delete-account' element={<DeleteAccount />} />
               <Route path='/groups' element={<GroupsRedirect />} />
               <Route path='/profile/edit' element={<Navigate to='/settings/profile' replace />} />
               <Route path='/profile/devices' element={<Navigate to='/settings/devices' replace />} />

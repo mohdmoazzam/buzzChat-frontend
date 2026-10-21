@@ -2,21 +2,24 @@ import {
     BlockRounded as BlockIcon,
     DoneAllRounded as SeenIcon,
     DoneRounded as SentIcon,
-    KeyboardArrowDownRounded as MenuIcon,
+    MoreVertRounded as MenuIcon,
     ShortcutRounded as ForwardIcon,
 } from '@mui/icons-material';
 import { Box, IconButton, Tooltip, Typography } from '@mui/material';
-import React, { memo } from 'react';
+import React, { memo, useRef, useState } from 'react';
 import moment from 'moment';
-import { lightBlue, orange } from '../../constants/color';
+import { lightBlue, myBubble } from '../../constants/color';
 import { fileFormat, fullName } from '../../lib/features';
 import RenderAttachment from './RenderAttachment';
 
 const BIG = "18px";
 const SMALL = "6px";
+// The bubble's tail (px)
+const TAIL_WIDTH = 8;
+const TAIL_HEIGHT = 13;
 
 // ✓ sent, ✓✓ seen (in a group, once everyone who was there has seen it)
-const ReadTicks = ({ seenBy = 0, seenTotal = 0, isGroup, onColor }) => {
+const ReadTicks = ({ seenBy = 0, seenTotal = 0, isGroup }) => {
     const seen = seenTotal > 0 && seenBy >= seenTotal;
     const Icon = seen ? SeenIcon : SentIcon;
     const label = isGroup && seenTotal > 0 ? `Seen by ${seenBy} of ${seenTotal}` : seen ? "Seen" : "Sent";
@@ -28,20 +31,134 @@ const ReadTicks = ({ seenBy = 0, seenTotal = 0, isGroup, onColor }) => {
                     fontSize: 15,
                     ml: 0.4,
                     verticalAlign: "-3px",
-                    // On the orange bubble the tick shape carries the meaning; elsewhere seen is blue
-                    color: onColor ? "#fff" : seen ? lightBlue : "inherit",
-                    opacity: onColor && !seen ? 0.75 : 1,
+                    color: seen ? lightBlue : "inherit",
                 }}
             />
         </Tooltip>
     );
 };
 
+const ATTACHMENT_LABELS = { image: "📷 Photo", video: "🎥 Video", audio: "🎵 Audio", file: "📎 File" };
+
+/** One line describing a message, for a reply's quote and the composer's reply bar. */
+export const replySnippet = ({ content, attachment, deleted }) => {
+    if (deleted) return "Deleted message";
+    if (content) return content;
+    return attachment?.url ? ATTACHMENT_LABELS[fileFormat(attachment.url)] : "Message";
+};
+
+// The quoted message at the top of a reply; tapping it scrolls to the original
+const ReplyQuote = ({ reply, mine, myId, onJump }) => {
+    const name = reply.sender?.id === myId ? "You" : fullName(reply.sender);
+    return (
+        <Box
+            component="button"
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation();
+                onJump?.(reply.id);
+            }}
+            sx={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                font: "inherit",
+                color: "inherit",
+                border: "none",
+                cursor: onJump ? "pointer" : "default",
+                mb: 0.5,
+                px: 1,
+                py: 0.5,
+                borderRadius: "8px",
+                borderLeft: `3px solid ${lightBlue}`,
+                bgcolor: mine ? "rgba(0,0,0,0.05)" : "#f4f4f6",
+                minWidth: 0,
+            }}
+        >
+            <Typography variant="caption" fontWeight={700} sx={{ display: "block", color: lightBlue, lineHeight: 1.3 }} noWrap>
+                {name}
+            </Typography>
+            <Typography
+                variant="body2"
+                sx={{
+                    fontSize: "0.82rem",
+                    lineHeight: 1.35,
+                    opacity: 0.75,
+                    fontStyle: reply.deleted ? "italic" : "normal",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    wordBreak: "break-word",
+                }}
+            >
+                {replySnippet(reply)}
+            </Typography>
+        </Box>
+    );
+};
+
+// Press and hold on touch screens: how long, and how far the finger may drift before it counts as a scroll
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP_PX = 10;
+
+/**
+ * Press-and-hold for touch screens (iOS Safari has no long-press contextmenu). Calls `onLongPress`
+ * with the finger's position; a scroll or a quick tap cancels it.
+ */
+const useLongPress = (onLongPress) => {
+    const timer = useRef(null);
+    const start = useRef(null);
+    // Set once the menu opened, so the release doesn't also click a link and Android's own
+    // contextmenu (which follows a long press) doesn't open it a second time
+    const fired = useRef(false);
+    const [pressing, setPressing] = useState(false);
+
+    const cancel = () => {
+        clearTimeout(timer.current);
+        timer.current = null;
+        setPressing(false);
+    };
+
+    if (!onLongPress) return { pressing: false, handlers: {}, fired };
+    return {
+        pressing,
+        fired,
+        handlers: {
+            onTouchStart: (e) => {
+                if (e.touches.length !== 1) return cancel();
+                const { clientX, clientY } = e.touches[0];
+                start.current = { x: clientX, y: clientY };
+                fired.current = false;
+                setPressing(true);
+                timer.current = setTimeout(() => {
+                    fired.current = true;
+                    setPressing(false);
+                    navigator.vibrate?.(10);
+                    onLongPress({ top: clientY, left: clientX });
+                }, LONG_PRESS_MS);
+            },
+            onTouchMove: (e) => {
+                const touch = e.touches[0];
+                if (!start.current || !touch) return;
+                if (Math.hypot(touch.clientX - start.current.x, touch.clientY - start.current.y) > LONG_PRESS_SLOP_PX) cancel();
+            },
+            onTouchEnd: (e) => {
+                cancel();
+                if (fired.current) e.preventDefault();
+            },
+            onTouchCancel: cancel,
+        },
+    };
+};
+
 const MessageComponent = ({
     message, user, showSender = false, isFirst = true, isLast = true, onOpenMenu,
-    isGroup = false, seenBy, seenTotal,
+    isGroup = false, seenBy, seenTotal, onJumpToReply,
 }) => {
     const { sender, content, attachments = [], created_at, system, forwarded, edited_at, deleted_at } = message;
+    const hasMenu = !deleted_at && !!onOpenMenu && !system;
+    const longPress = useLongPress(hasMenu ? (position) => onOpenMenu({ message, position }) : null);
 
     if (system) {
         return (
@@ -61,26 +178,46 @@ const MessageComponent = ({
     const time = moment(created_at).format("h:mm A");
     const deleted = !!deleted_at;
     const onlyAttachments = !deleted && attachments.length > 0 && !content;
-    const hasMenu = !deleted && !!onOpenMenu;
-    // White text on the orange bubble
-    const onColor = mine && !onlyAttachments && !deleted;
 
-    // Tight corners where bubbles in the same group touch
+    // Attachment-only messages render bare, without a coloured bubble; deleted ones are muted
+    const bubbleColor = deleted ? "#f4f4f6" : onlyAttachments ? "transparent" : mine ? myBubble : "#fff";
+    // WhatsApp-style tail on the first bubble of a run, at the top corner on the sender's side
+    const hasTail = isFirst && !onlyAttachments;
+    // The tail's corner is square (the tail continues it); tight corners where bubbles in a run touch
+    const topOuter = hasTail ? 0 : isFirst ? BIG : SMALL;
     const radius = mine
-        ? { borderTopLeftRadius: BIG, borderBottomLeftRadius: BIG, borderTopRightRadius: isFirst ? BIG : SMALL, borderBottomRightRadius: isLast ? BIG : SMALL }
-        : { borderTopRightRadius: BIG, borderBottomRightRadius: BIG, borderTopLeftRadius: isFirst ? BIG : SMALL, borderBottomLeftRadius: isLast ? BIG : SMALL };
+        ? { borderTopLeftRadius: BIG, borderBottomLeftRadius: BIG, borderTopRightRadius: topOuter, borderBottomRightRadius: isLast ? BIG : SMALL }
+        : { borderTopRightRadius: BIG, borderBottomRightRadius: BIG, borderTopLeftRadius: topOuter, borderBottomLeftRadius: isLast ? BIG : SMALL };
+    const tail = hasTail
+        ? {
+            "&::before": {
+                content: '""',
+                position: "absolute",
+                top: 0,
+                [mine ? "right" : "left"]: -TAIL_WIDTH,
+                width: TAIL_WIDTH,
+                height: TAIL_HEIGHT,
+                bgcolor: bubbleColor,
+                // A triangle hanging off the top corner: flat along the top, slanting back into the bubble
+                clipPath: mine ? "polygon(0 0, 100% 0, 0 100%)" : "polygon(0 0, 100% 0, 100% 100%)",
+            },
+        }
+        : {};
 
-    // Right-click (desktop) or long-press (most mobile browsers) opens the same menu as the arrow
+    // Right-click on desktop opens the same menu as ⋮ (press and hold does it on touch screens)
     const contextMenuHandler = hasMenu
         ? (e) => {
             e.preventDefault();
+            if (longPress.fired.current) return;
             onOpenMenu({ message, position: { top: e.clientY, left: e.clientX } });
         }
         : undefined;
 
     return (
         <Box
+            data-message-id={message.id}
             sx={{
+                borderRadius: "12px",
                 alignSelf: mine ? "flex-end" : "flex-start",
                 maxWidth: { xs: "85%", sm: "70%", lg: "60%" },
                 mt: isFirst ? 1.25 : 0.25,
@@ -94,55 +231,49 @@ const MessageComponent = ({
                 </Typography>
             )}
 
+            {/* The bubble with ⋮ beside it (desktop, on hover), never on top of the text, time or ticks */}
+            <Box
+                sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    flexDirection: mine ? "row-reverse" : "row",
+                    "&:hover .msg-menu, & .msg-menu:focus-visible, & .msg-menu[aria-expanded='true']": { opacity: 1 },
+                }}
+            >
             <Box
                 onContextMenu={contextMenuHandler}
+                {...longPress.handlers}
                 sx={{
                     ...radius,
                     position: "relative",
-                    // Attachment-only messages render bare, without a coloured bubble; deleted ones are muted
-                    bgcolor: deleted ? "#f4f4f6" : onlyAttachments ? "transparent" : mine ? orange : "#fff",
-                    color: onColor ? "#fff" : "text.primary",
-                    border: deleted || (!mine && !onlyAttachments) ? "1px solid #ececf0" : "none",
+                    minWidth: 0,
+                    transition: "transform 0.15s ease-out",
+                    // Holding a message dips it slightly, so the press is felt before the menu opens
+                    transform: longPress.pressing ? "scale(0.97)" : "none",
+                    // Touch screens: no text selection or iOS callout while pressing and holding (Copy is in the menu)
+                    "@media (hover: none)": hasMenu ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" } : {},
+                    bgcolor: bubbleColor,
+                    color: "text.primary",
+                    // Light bubbles get a soft edge. A drop-shadow filter (unlike a border) follows the tail too
+                    filter: onlyAttachments ? "none" : "drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.13))",
+                    ...tail,
                     px: onlyAttachments ? 0 : 1.5,
                     pt: onlyAttachments ? 0 : 0.75,
                     pb: onlyAttachments ? 0 : 0.6,
                     wordBreak: "break-word",
                     overflowWrap: "anywhere",
-                    "&:hover .msg-menu, & .msg-menu:focus-visible": { opacity: 1 },
-                    // No hover on touch screens: keep the arrow visible
-                    "@media (hover: none)": { "& .msg-menu": { opacity: 0.9 } },
                 }}
             >
-                {hasMenu && (
-                    <IconButton
-                        className="msg-menu"
-                        size="small"
-                        aria-label="Message options"
-                        onClick={(e) => onOpenMenu({ message, anchorEl: e.currentTarget })}
-                        sx={{
-                            position: "absolute",
-                            top: 4,
-                            right: 4,
-                            zIndex: 1,
-                            width: 24,
-                            height: 24,
-                            opacity: 0,
-                            transition: "opacity 0.15s",
-                            color: onColor ? "#fff" : "text.secondary",
-                            bgcolor: onColor ? orange : onlyAttachments ? "rgba(255,255,255,0.9)" : "#fff",
-                            boxShadow: onlyAttachments ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
-                            "&:hover": { bgcolor: onColor ? orange : "#f4f4f6" },
-                        }}
-                    >
-                        <MenuIcon sx={{ fontSize: 18 }} />
-                    </IconButton>
+                {message.reply_to && !deleted && (
+                    <ReplyQuote reply={message.reply_to} mine={mine} myId={user?.id} onJump={onJumpToReply} />
                 )}
 
                 {forwarded && !deleted && (
                     <Box
                         sx={{
                             display: "flex", alignItems: "center", gap: 0.5, fontSize: "0.72rem", fontStyle: "italic",
-                            opacity: onColor ? 0.85 : 0.6, mb: 0.25, ...(onlyAttachments && { px: 0.5 }),
+                            opacity: 0.6, mb: 0.25, ...(onlyAttachments && { px: 0.5 }),
                         }}
                     >
                         <ForwardIcon sx={{ fontSize: 14 }} /> Forwarded
@@ -190,7 +321,7 @@ const MessageComponent = ({
                         sx={{
                             fontSize: "0.68rem",
                             lineHeight: 1.6,
-                            opacity: onColor ? 0.8 : 0.5,
+                            opacity: 0.55,
                             whiteSpace: "nowrap",
                             ml: "auto",
                             ...(onlyAttachments && { px: 0.5 }),
@@ -198,10 +329,34 @@ const MessageComponent = ({
                     >
                         {edited_at && !deleted ? `edited · ${time}` : time}
                         {mine && !deleted && seenTotal !== undefined && (
-                            <ReadTicks seenBy={seenBy} seenTotal={seenTotal} isGroup={isGroup} onColor={onColor} />
+                            <ReadTicks seenBy={seenBy} seenTotal={seenTotal} isGroup={isGroup} />
                         )}
                     </Typography>
                 </Box>
+            </Box>
+
+            {hasMenu && (
+                <IconButton
+                    className="msg-menu"
+                    size="small"
+                    aria-label="Message options"
+                    aria-haspopup="menu"
+                    onClick={(e) => onOpenMenu({ message, anchorEl: e.currentTarget })}
+                    sx={{
+                        flexShrink: 0,
+                        width: 28,
+                        height: 28,
+                        opacity: 0,
+                        transition: "opacity 0.15s",
+                        color: "text.secondary",
+                        "&:hover": { bgcolor: "#ececf0" },
+                        // Touch screens use press and hold instead
+                        "@media (hover: none)": { display: "none" },
+                    }}
+                >
+                    <MenuIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+            )}
             </Box>
         </Box>
     );

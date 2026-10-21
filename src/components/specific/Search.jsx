@@ -29,7 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { orange } from "../../constants/color";
 import { fullName, transformImage } from "../../lib/features";
 import { useLazySearchUserQuery, useSendFriendRequestMutation, PAGE_SIZE } from "../../redux/api/api";
-import { setIsNotification, setIsSearch } from "../../redux/reducers/misc";
+import { setIsSearch } from "../../redux/reducers/misc";
 
 
 const Search = () => {
@@ -128,7 +128,7 @@ const Search = () => {
 
   const openNotifications = () => {
     closeHandler();
-    dispatch(setIsNotification(true));
+    navigate("/notifications");
   };
 
   return (

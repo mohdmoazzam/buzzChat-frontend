@@ -121,14 +121,66 @@ const api = createApi({
             providesTags: ["Notifications"],
         }),
 
-        // In-app notifications (friend accepted, added to a group, ...) with the unread count
+        // In-app notifications (friend accepted, added to a group, ...) with the unread count.
+        // No cursor = the newest page (shared with the header bell); a cursor = an older page
         getActivity: builder.query({
-            query: ({ take = PAGE_SIZE.notifications } = {}) => ({
+            query: ({ take = PAGE_SIZE.notifications, cursor } = {}) => ({
                 url: "notifications",
-                params: { take },
+                params: { take, ...cursorParam(cursor) },
                 credentials: "include"
             }),
             providesTags: ["Activity"],
+        }),
+
+        // Delete my account: email the confirmation code, then delete with { otp }
+        sendDeleteAccountCode: builder.mutation({
+            query: () => ({ url: "user/delete-account/code", method: "POST", credentials: "include" }),
+        }),
+        deleteAccount: builder.mutation({
+            query: (body) => ({ url: "user/delete-account", method: "POST", credentials: "include", body }),
+        }),
+
+        // { current_password, new_password }; logs out the user's other devices
+        changePassword: builder.mutation({
+            query: (body) => ({
+                url: "user/password",
+                method: "PUT",
+                credentials: "include",
+                body
+            }),
+            invalidatesTags: ["Sessions"],
+        }),
+
+        // Removed from the newest page at once (undone if the request fails); the page drops it from older ones
+        deleteNotification: builder.mutation({
+            query: (id) => ({
+                url: `notifications/${id}`,
+                method: "DELETE",
+                credentials: "include"
+            }),
+            async onQueryStarted(id, { dispatch, queryFulfilled }) {
+                const patch = dispatch(
+                    api.util.updateQueryData("getActivity", undefined, (draft) => {
+                        const removed = draft.data.find((item) => item.id === id);
+                        draft.data = draft.data.filter((item) => item.id !== id);
+                        if (removed && !removed.read) draft.unread_count = Math.max(0, draft.unread_count - 1);
+                    })
+                );
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patch.undo();
+                }
+            },
+        }),
+
+        clearNotifications: builder.mutation({
+            query: () => ({
+                url: "notifications",
+                method: "DELETE",
+                credentials: "include"
+            }),
+            invalidatesTags: ["Activity"],
         }),
 
         markAllActivityRead: builder.mutation({
@@ -186,11 +238,11 @@ const api = createApi({
 
         // { chat_id, attachment_ids }
         sendAttachments: builder.mutation({
-            query: ({ chat_id, attachment_ids }) => ({
+            query: ({ chat_id, attachment_ids, reply_to_id }) => ({
                 url: `chat/${chat_id}/messages`,
                 method: "POST",
                 credentials: "include",
-                body: { attachment_ids }
+                body: { attachment_ids, ...(reply_to_id ? { reply_to_id } : {}) }
             }),
             keepUnusedDataFor: 0,
         }),
@@ -380,7 +432,13 @@ export const {
     useGetNotificationsQuery,
     useAcceptFriendRequestMutation,
     useGetActivityQuery,
+    useLazyGetActivityQuery,
     useMarkAllActivityReadMutation,
+    useDeleteNotificationMutation,
+    useChangePasswordMutation,
+    useSendDeleteAccountCodeMutation,
+    useDeleteAccountMutation,
+    useClearNotificationsMutation,
     useGetChatDetailsQuery,
     useGetChatMessagesQuery,
     useGroupMembersQuery,
