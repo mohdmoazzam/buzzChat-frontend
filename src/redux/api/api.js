@@ -1,21 +1,33 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { server } from "../../constants/config";
+import { userNotExists } from "../reducers/auth";
 
 
 export const CHAT_PAGE_SIZE = 20;
 
+const rawBaseQuery = fetchBaseQuery({
+    baseUrl: `${server}/api/v1/`,
+    prepareHeaders: (headers, { getState }) => {
+        const token = getState().auth.token;
+        if (token) {
+            headers.set("Authorization", `Bearer ${token}`);
+        }
+    }
+});
+
+// A 401 means this device's session was logged out or expired, so drop back to the login page
+const baseQuery = async (args, queryApi, extraOptions) => {
+    const result = await rawBaseQuery(args, queryApi, extraOptions);
+    if (result.error?.status === 401 && queryApi.getState().auth.user) {
+        queryApi.dispatch(userNotExists());
+    }
+    return result;
+};
+
 const api = createApi({
     reducerPath: "api",
-    baseQuery: fetchBaseQuery({
-        baseUrl: `${server}/api/v1/`,
-        prepareHeaders: (headers, { getState }) => {
-            const token = getState().auth.token;
-            if (token) {
-                headers.set("Authorization", `Bearer ${token}`);
-            }
-        }
-    }),
-    tagTypes: ["Chat", "Notifications", "Activity", "Unread"],
+    baseQuery,
+    tagTypes: ["Chat", "Notifications", "Activity", "Unread", "Sessions"],
     // Refresh data when the tab regains focus or the network comes back
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -284,6 +296,41 @@ const api = createApi({
                 body: data
             }),
         }),
+
+        // Devices this account is logged in on; the caller's own is marked `current`
+        getSessions: builder.query({
+            query: () => ({ url: "user/sessions", credentials: "include" }),
+            keepUnusedDataFor: 0,
+            providesTags: ["Sessions"],
+        }),
+
+        revokeSession: builder.mutation({
+            query: (sessionId) => ({
+                url: `user/sessions/${sessionId}`,
+                method: "DELETE",
+                credentials: "include"
+            }),
+            invalidatesTags: ["Sessions"]
+        }),
+
+        // Every device except this one
+        revokeOtherSessions: builder.mutation({
+            query: () => ({
+                url: "user/sessions/others",
+                method: "DELETE",
+                credentials: "include"
+            }),
+            invalidatesTags: ["Sessions"]
+        }),
+
+        // Every device, this one included
+        revokeAllSessions: builder.mutation({
+            query: () => ({
+                url: "user/sessions",
+                method: "DELETE",
+                credentials: "include"
+            }),
+        }),
     })
 });
 
@@ -315,5 +362,9 @@ export const {
     useDeleteChatMutation,
     useLeaveGroupMutation,
     useUpdateProfileMutation,
-    useLazyCheckUsernameQuery
+    useLazyCheckUsernameQuery,
+    useGetSessionsQuery,
+    useRevokeSessionMutation,
+    useRevokeOtherSessionsMutation,
+    useRevokeAllSessionsMutation
 } = api;

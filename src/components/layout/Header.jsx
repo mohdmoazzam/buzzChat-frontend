@@ -1,5 +1,6 @@
 import {
   ChatBubbleRounded as ChatIcon,
+  DevicesOutlined as DevicesIcon,
   EditOutlined as EditIcon,
   PersonOutline as PersonIcon,
   GroupAddOutlined as AddIcon,
@@ -32,6 +33,7 @@ import { server } from "../../constants/config";
 import { brandGradient } from "../../constants/theme";
 import { fullName, transformImage } from "../../lib/features";
 import { userNotExists } from "../../redux/reducers/auth";
+import { getSocket } from "../../socket";
 import { useGetActivityQuery, useGetNotificationsQuery } from "../../redux/api/api";
 import {
   setIsMobileMenu,
@@ -54,7 +56,8 @@ const Header = () => {
   // Unread in-app notifications (refetched on NEW_NOTIFICATION)
   const { data: activity } = useGetActivityQuery();
   const notificationCount = (notifications?.data?.length ?? 0) + (activity?.unread_count ?? 0);
-  const { user } = useSelector((state) => state.auth);
+  const { user, token } = useSelector((state) => state.auth);
+  const socket = getSocket();
   const [accountAnchor, setAccountAnchor] = useState(null);
   const bellRef = useRef(null);
 
@@ -79,8 +82,13 @@ const Header = () => {
 
   const handleLogout = async () => {
     setAccountAnchor(null);
+    // Disconnect first, so this tab doesn't also get the server's SESSION_REVOKED
+    socket?.disconnect();
     try {
-      await axios.get(`${server}/api/v1/user/logout`, { withCredentials: true });
+      await axios.post(`${server}/api/v1/user/logout`, null, {
+        withCredentials: true,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
     } catch (err) {
       // Still clear local session even if the request fails
     }
@@ -189,6 +197,12 @@ const Header = () => {
             <EditIcon fontSize="small" />
           </ListItemIcon>
           Edit profile
+        </MenuItem>
+        <MenuItem onClick={() => goTo("/profile/devices")}>
+          <ListItemIcon>
+            <DevicesIcon fontSize="small" />
+          </ListItemIcon>
+          Devices
         </MenuItem>
         <Divider />
         <MenuItem onClick={openSearchDialog}>

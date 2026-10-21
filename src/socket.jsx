@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { io } from "socket.io-client";
 import { server } from "./constants/config";
 import api from "./redux/api/api";
+import { userNotExists } from "./redux/reducers/auth";
 
 const SocketContext = createContext(null);
 
@@ -25,6 +27,16 @@ const SocketProvider = ({ children }) => {
         instance.on("connect", () => {
             if (hasConnected) dispatch(api.util.invalidateTags(["Chat", "Notifications"]));
             hasConnected = true;
+        });
+
+        // This device was logged out elsewhere (Devices page, password reset), or its session expired
+        const sessionEnded = () => {
+            dispatch(userNotExists());
+            toast("You've been logged out on this device", { id: "session-ended" });
+        };
+        instance.on("SESSION_REVOKED", sessionEnded);
+        instance.on("connect_error", (error) => {
+            if (error.message === "Authentication error") sessionEnded();
         });
 
         setSocket(instance);
