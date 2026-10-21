@@ -14,7 +14,7 @@ import {
   ShortcutRounded as ForwardIcon,
 } from "@mui/icons-material";
 import {
-  Box, CircularProgress, Fab, IconButton, InputBase, ListItemIcon, ListItemText, Menu, MenuItem, Skeleton, Stack, Tooltip,
+  Box, Button, CircularProgress, Fab, Fade, IconButton, InputBase, ListItemIcon, ListItemText, Menu, MenuItem, Skeleton, Stack, Tooltip,
   Typography, Zoom,
 } from "@mui/material";
 import moment from "moment";
@@ -24,7 +24,7 @@ import { useDispatch, useSelector } from "react-redux";
 import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
 import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
-import GroupInfoPanel, { useGroupActions, useGroupProfiles } from "../components/specific/GroupInfo";
+import GroupInfoPanel, { useGroupActions } from "../components/specific/GroupInfo";
 import AppLayout from "../components/layout/AppLayout";
 import MessageComponent from "../components/shared/MessageComponent";
 import AvatarCard from "../components/shared/AvatarCard";
@@ -86,7 +86,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
-  const [page, setPage] = useState(1);
+  // History page to load: null = the newest messages, then the cursor of the oldest one loaded
+  const [historyCursor, setHistoryCursor] = useState(null);
   const [fileMenuAnchor, setFileMenuAnchor] = useState(null);
   const [iamTyping, setIamTyping] = useState(false);
   // Who else is typing here: { [user_id]: first_name } (groups can have several at once)
@@ -118,15 +119,22 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
 
   const chatDetails = useGetChatDetailsQuery({ chatId }, { skip: !chatId });
   const oldMessagesChunk = useGetChatMessagesQuery(
-    { chatId, page },
+    { chatId, cursor: historyCursor },
     { skip: !chatId }
   );
+  const historyPagination = oldMessagesChunk.data?.pagination;
+  // An older page (not the first, and not a background refetch of one already shown) is on its way
+  const isLoadingOlder = historyCursor !== null && oldMessagesChunk.isFetching && !oldMessagesChunk.currentData;
+  const olderFailed = historyCursor !== null && oldMessagesChunk.isError && !oldMessagesChunk.isFetching;
+  const reachedStart = !!historyPagination && !historyPagination.has_more;
+  const loadOlderMessages = useCallback(() => {
+    if (!oldMessagesChunk.isFetching && historyPagination?.next_cursor) setHistoryCursor(historyPagination.next_cursor);
+  }, [oldMessagesChunk.isFetching, historyPagination]);
 
   const { data: oldMessages, setData: setOldMessages } = useInfiniteScrollTop(
     containerRef,
-    oldMessagesChunk.data?.total_pages,
-    page,
-    setPage,
+    !!historyPagination?.has_more,
+    loadOlderMessages,
     oldMessagesChunk.data?.messages
   );
 
@@ -135,12 +143,12 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
 
   // Group info and leave/delete: details carry creator_id and member ids; the list item has the avatars
   const groupChat = isGroup && chatDetails.data?.chat ? { ...chatDetails.data.chat, avatar: chat?.avatar } : null;
-  const groupProfiles = useGroupProfiles(chatId, !!isGroup);
-  const groupActions = useGroupActions({ chatId, chat: groupChat, currentUserId: user.id, profiles: groupProfiles.profiles });
+  const groupActions = useGroupActions({ chatId, chat: groupChat, currentUserId: user.id, panelOpen: groupInfoOpen });
 
   const errors = [
     { isError: chatDetails.isError, error: chatDetails.error },
-    { isError: oldMessagesChunk.isError, error: oldMessagesChunk.error },
+    // Older pages show their own retry at the top of the chat instead of a toast
+    { isError: oldMessagesChunk.isError && historyCursor === null, error: oldMessagesChunk.error },
   ];
 
   // Marks this chat read while it's on screen: clears the badge now, tells the server shortly after
@@ -309,7 +317,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       setMessages([]);
       setMessage("");
       setOldMessages([]);
-      setPage(1);
+      setHistoryCursor(null);
       setTypingUsers({});
       setGroupInfoOpen(false);
       setGroupMenuAnchor(null);
@@ -675,12 +683,67 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             <>
               {/* Push short conversations to the bottom */}
               <Box sx={{ flex: 1 }} />
+              {/* Always takes its space and only becomes visible, so reaching the start doesn't shift the messages */}
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                aria-hidden={!reachedStart}
+                sx={{
+                  alignSelf: "center",
+                  px: 1.5,
+                  py: 0.5,
+                  mb: 1.5,
+                  borderRadius: "999px",
+                  bgcolor: "action.hover",
+                  visibility: reachedStart ? "visible" : "hidden",
+                }}
+              >
+                Start of conversation
+              </Typography>
               {renderMessages()}
             </>
           )}
           {userTyping && <Box sx={{ mt: 1 }}><TypingLoader /></Box>}
           </Box>
         </Box>
+
+        {/* Older messages: floats over the top (out of the flow, so the messages don't jump) */}
+        <Fade in={isLoadingOlder || olderFailed} unmountOnExit>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            role="status"
+            aria-live="polite"
+            sx={{
+              position: "absolute",
+              top: 12,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 2,
+              px: 1.75,
+              py: 0.75,
+              borderRadius: "999px",
+              bgcolor: "background.paper",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {olderFailed ? (
+              <>
+                <Typography variant="body2" color="text.secondary">Couldn't load older messages</Typography>
+                <Button size="small" onClick={() => oldMessagesChunk.refetch()} sx={{ minWidth: 0, px: 1, borderRadius: "999px" }}>
+                  Retry
+                </Button>
+              </>
+            ) : (
+              <>
+                <CircularProgress size={16} thickness={5} />
+                <Typography variant="body2" color="text.secondary">Loading older messages…</Typography>
+              </>
+            )}
+          </Stack>
+        </Fade>
 
         {/* Jump to latest */}
         <Zoom in={!isNearBottom}>
@@ -908,8 +971,6 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             currentUserId={user.id}
             onlineUsers={onlineUsers}
             actions={groupActions}
-            profiles={groupProfiles.profiles}
-            isLoading={groupProfiles.isLoading}
           />
           {groupActions.dialogs}
         </>
