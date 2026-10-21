@@ -521,4 +521,4 @@ const EditProfile = () => {
   );
 };
 
-export default AppLayout({ showListOnMobile: false })(EditProfile);
+export default AppLayout({ showListOnMobile: false, sidebar: "settings" })(EditProfile);

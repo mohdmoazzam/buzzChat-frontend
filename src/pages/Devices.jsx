@@ -3,7 +3,7 @@ import {
   SmartphoneOutlined as MobileIcon,
   TabletMacOutlined as TabletIcon,
 } from "@mui/icons-material";
-import { Box, Button, Chip, Skeleton, Stack, Typography } from "@mui/material";
+import { Box, Button, Divider, Skeleton, Stack, Typography } from "@mui/material";
 import moment from "moment";
 import React, { useState } from "react";
 import toast from "react-hot-toast";
@@ -11,6 +11,7 @@ import { useDispatch } from "react-redux";
 import ConfirmDeleteDialog from "../components/dialogs/ConfirmDeleteDialog";
 import AppLayout from "../components/layout/AppLayout";
 import Title from "../components/shared/Title";
+import { accentSoft, surfaceMuted } from "../constants/theme";
 import { useErrors } from "../hooks/hook";
 import {
   useGetSessionsQuery,
@@ -22,6 +23,7 @@ import { userNotExists } from "../redux/reducers/auth";
 import { getSocket } from "../socket";
 
 const DEVICE_ICONS = { mobile: MobileIcon, tablet: TabletIcon };
+const ACTIVE = "#16a34a";
 
 const deviceName = ({ browser, os }) => {
   if (browser && os) return `${browser} on ${os}`;
@@ -41,6 +43,70 @@ const CONFIRMS = {
   },
 };
 
+const List = ({ children }) => <Box sx={{ borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}>{children}</Box>;
+
+const SectionLabel = ({ children, aside }) => (
+  <Stack direction="row" alignItems="center" justifyContent="space-between" mt={{ xs: 4, sm: 5 }} mb={0.5} minHeight={32}>
+    <Typography variant="overline" color="text.secondary" fontWeight={600} letterSpacing="0.08em">
+      {children}
+    </Typography>
+    {aside}
+  </Stack>
+);
+
+const RowSkeleton = () => (
+  <Stack direction="row" alignItems="center" spacing={2} sx={{ py: 2 }}>
+    <Skeleton variant="circular" width={44} height={44} />
+    <Box sx={{ flex: 1 }}>
+      <Skeleton width="45%" />
+      <Skeleton width="70%" />
+    </Box>
+  </Stack>
+);
+
+const SessionRow = ({ session, onLogOut, isRevoking }) => {
+  const Icon = DEVICE_ICONS[session.device_type] ?? DesktopIcon;
+  return (
+    <Stack direction="row" alignItems="center" spacing={2} sx={{ py: 2 }}>
+      <Box
+        sx={{
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          flexShrink: 0,
+          display: "grid",
+          placeItems: "center",
+          bgcolor: session.current ? accentSoft : surfaceMuted,
+          color: session.current ? "primary.main" : "text.secondary",
+        }}
+      >
+        <Icon sx={{ fontSize: 22 }} />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography fontWeight={600} noWrap>{deviceName(session)}</Typography>
+        <Typography variant="body2" color="text.secondary" noWrap>
+          {session.current ? (
+            <Box component="span" sx={{ color: ACTIVE, fontWeight: 500 }}>Active now</Box>
+          ) : (
+            `Active ${moment(session.last_seen_at).fromNow()}`
+          )}
+          {[session.ip, `Since ${moment(session.created_at).format("D MMM YYYY")}`].filter(Boolean).map((part) => ` · ${part}`)}
+        </Typography>
+      </Box>
+      {onLogOut && (
+        <Button
+          color="error"
+          onClick={onLogOut}
+          disabled={isRevoking}
+          sx={{ borderRadius: "999px", px: 2, flexShrink: 0 }}
+        >
+          {isRevoking ? "Logging out…" : "Log out"}
+        </Button>
+      )}
+    </Stack>
+  );
+};
+
 const Devices = () => {
   const dispatch = useDispatch();
   const socket = getSocket();
@@ -53,9 +119,9 @@ const Devices = () => {
 
   useErrors([{ isError: sessions.isError, error: sessions.error }]);
 
-  // This device first, then most recently active
-  const list = [...(sessions.data?.sessions ?? [])].sort((a, b) => Number(b.current) - Number(a.current));
-  const hasOthers = list.some((session) => !session.current);
+  const list = sessions.data?.sessions ?? [];
+  const current = list.find((session) => session.current);
+  const others = list.filter((session) => !session.current);
 
   const logOutDevice = async (sessionId) => {
     setRevokingId(sessionId);
@@ -94,62 +160,62 @@ const Devices = () => {
           Devices
         </Typography>
         <Typography color="text.secondary" mt={0.5}>
-          Where you're logged in. If you don't recognize a device, log it out and reset your password.
+          Where you’re logged in. Don’t recognize a device? Log it out and reset your password.
         </Typography>
 
-        <Stack spacing={1.5} mt={4}>
-          {sessions.isLoading
-            ? [0, 1].map((key) => <Skeleton key={key} variant="rounded" height={76} sx={{ borderRadius: "16px" }} />)
-            : list.map((session) => {
-                const Icon = DEVICE_ICONS[session.device_type] ?? DesktopIcon;
-                return (
-                  <Stack
-                    key={session.id}
-                    direction="row"
-                    alignItems="center"
-                    spacing={2}
-                    sx={{ p: 2, border: "1px solid", borderColor: "divider", borderRadius: "16px" }}
-                  >
-                    <Icon sx={{ color: "text.secondary", fontSize: 28 }} />
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Stack direction="row" alignItems="center" spacing={1}>
-                        <Typography fontWeight={600} noWrap>{deviceName(session)}</Typography>
-                        {session.current && <Chip label="This device" size="small" color="primary" />}
-                      </Stack>
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {[
-                          session.ip,
-                          session.current ? "Active now" : `Active ${moment(session.last_seen_at).fromNow()}`,
-                          `Logged in ${moment(session.created_at).format("D MMM YYYY")}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Typography>
-                    </Box>
-                    {!session.current && (
-                      <Button
-                        onClick={() => logOutDevice(session.id)}
-                        disabled={revokingId === session.id}
-                        sx={{ borderRadius: "999px", flexShrink: 0 }}
-                      >
-                        Log out
-                      </Button>
-                    )}
-                  </Stack>
-                );
-              })}
-        </Stack>
+        <SectionLabel>This device</SectionLabel>
+        <List>{sessions.isLoading ? <RowSkeleton /> : current && <SessionRow session={current} />}</List>
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} mt={4}>
+        <SectionLabel
+          aside={
+            others.length > 0 && (
+              <Button size="small" color="error" onClick={() => setConfirm("others")} sx={{ borderRadius: "999px", px: 1.5 }}>
+                Log out all
+              </Button>
+            )
+          }
+        >
+          Other devices
+        </SectionLabel>
+        <List>
+          {sessions.isLoading ? (
+            <RowSkeleton />
+          ) : others.length ? (
+            others.map((session, index) => (
+              <React.Fragment key={session.id}>
+                {index > 0 && <Divider sx={{ ml: 7.5 }} />}
+                <SessionRow
+                  session={session}
+                  onLogOut={() => logOutDevice(session.id)}
+                  isRevoking={revokingId === session.id}
+                />
+              </React.Fragment>
+            ))
+          ) : (
+            <Typography color="text.secondary" py={3}>
+              You’re not logged in anywhere else.
+            </Typography>
+          )}
+        </List>
+
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+          spacing={1.5}
+          mt={{ xs: 5, sm: 6 }}
+          sx={{ p: 2.5, borderRadius: "16px", bgcolor: "rgba(211,47,47,0.04)" }}
+        >
+          <Box>
+            <Typography fontWeight={600}>Log out everywhere</Typography>
+            <Typography variant="body2" color="text.secondary">Ends every session, including this one.</Typography>
+          </Box>
           <Button
-            variant="outlined"
-            onClick={() => setConfirm("others")}
-            disabled={!hasOthers}
-            sx={{ borderRadius: "999px", px: 2.5 }}
+            variant="contained"
+            color="error"
+            onClick={() => setConfirm("all")}
+            sx={{ borderRadius: "999px", px: 2.5, flexShrink: 0 }}
           >
-            Log out other devices
-          </Button>
-          <Button variant="contained" color="error" onClick={() => setConfirm("all")} sx={{ borderRadius: "999px", px: 2.5 }}>
             Log out everywhere
           </Button>
         </Stack>
@@ -166,4 +232,4 @@ const Devices = () => {
   );
 };
 
-export default AppLayout({ showListOnMobile: false })(Devices);
+export default AppLayout({ showListOnMobile: false, sidebar: "settings" })(Devices);

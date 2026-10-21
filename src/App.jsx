@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Routes, Route, useLocation } from "react-router-dom";
 import ProtectRoute from './components/auth/ProtectRoute';
 import { AppLoader } from './components/layout/Loaders';
 import axios from 'axios';
@@ -16,6 +16,9 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Profile = lazy(() => import("./pages/Profile"));
 const EditProfile = lazy(() => import("./pages/EditProfile"));
 const Devices = lazy(() => import("./pages/Devices"));
+
+// Old /groups links (including ?group=) now live under settings
+const GroupsRedirect = () => <Navigate to={`/settings/groups${useLocation().search}`} replace />;
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const Dashboard = lazy(() => import("./pages/admin/Dashboard"));
@@ -51,10 +54,14 @@ const App = () => {
             <Route element={<SocketProvider><ProtectRoute user={user} /></SocketProvider>} >
               <Route path='/' element={<ProtectRoute user={user}><Home /></ProtectRoute>} />
               <Route path='/chat/:chatId' element={<Chat />} />
-              <Route path='/groups' element={<Group />} />
               <Route path='/profile' element={<Profile />} />
-              <Route path='/profile/edit' element={<EditProfile />} />
-              <Route path='/profile/devices' element={<Devices />} />
+              <Route path='/settings' element={<Navigate to='/settings/profile' replace />} />
+              <Route path='/settings/profile' element={<EditProfile />} />
+              <Route path='/settings/devices' element={<Devices />} />
+              <Route path='/settings/groups' element={<Group />} />
+              <Route path='/groups' element={<GroupsRedirect />} />
+              <Route path='/profile/edit' element={<Navigate to='/settings/profile' replace />} />
+              <Route path='/profile/devices' element={<Navigate to='/settings/devices' replace />} />
             </Route>
 
             <Route path='/login' element={<ProtectRoute user={!user} redirect='/'><Login /></ProtectRoute>} />

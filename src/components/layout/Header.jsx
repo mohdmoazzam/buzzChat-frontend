@@ -1,14 +1,12 @@
 import {
   ChatBubbleRounded as ChatIcon,
-  DevicesOutlined as DevicesIcon,
-  EditOutlined as EditIcon,
   PersonOutline as PersonIcon,
   GroupAddOutlined as AddIcon,
-  GroupsOutlined as GroupIcon,
   Logout as LogoutIcon,
   Menu as MenuIcon,
   NotificationsNoneOutlined as NotificationsIcon,
   PersonSearchOutlined as SearchIcon,
+  SettingsOutlined as SettingsIcon,
 } from "@mui/icons-material";
 import {
   Avatar,
@@ -119,7 +117,7 @@ const Header = () => {
         <Box sx={{ width: "100%", maxWidth: 1440, mx: "auto", height: "100%", display: "flex", alignItems: "center", "@media (min-width: 1441px)": { px: 2 } }}>
         <IconButton
           onClick={handleMobile}
-          aria-label="Open chats"
+          aria-label="Open menu"
           sx={{ display: { xs: "inline-flex", sm: "none" }, mr: 0.5 }}
         >
           <MenuIcon />
@@ -192,17 +190,11 @@ const Header = () => {
           </ListItemIcon>
           Profile
         </MenuItem>
-        <MenuItem onClick={() => goTo("/profile/edit")}>
+        <MenuItem onClick={() => goTo("/settings")}>
           <ListItemIcon>
-            <EditIcon fontSize="small" />
+            <SettingsIcon fontSize="small" />
           </ListItemIcon>
-          Edit profile
-        </MenuItem>
-        <MenuItem onClick={() => goTo("/profile/devices")}>
-          <ListItemIcon>
-            <DevicesIcon fontSize="small" />
-          </ListItemIcon>
-          Devices
+          Settings
         </MenuItem>
         <Divider />
         <MenuItem onClick={openSearchDialog}>
@@ -216,12 +208,6 @@ const Header = () => {
             <AddIcon fontSize="small" />
           </ListItemIcon>
           New group
-        </MenuItem>
-        <MenuItem onClick={() => goTo("/groups")}>
-          <ListItemIcon>
-            <GroupIcon fontSize="small" />
-          </ListItemIcon>
-          Manage groups
         </MenuItem>
         <Divider />
         <MenuItem onClick={handleLogout} sx={{ color: "error.main" }}>
