@@ -10,6 +10,7 @@ import {
   BadgeOutlined as BadgeIcon,
   NotesOutlined as NotesIcon,
   MailOutline as MailIcon,
+  PinOutlined as PinIcon,
 } from "@mui/icons-material";
 import {
   Avatar,
@@ -59,6 +60,8 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [avatarMissing, setAvatarMissing] = useState(false);
+  // Forgot password flow: null (off), "email" (ask for email) or "reset" (enter code + new password)
+  const [forgotStep, setForgotStep] = useState(null);
 
   const dispatch = useDispatch();
 
@@ -68,12 +71,59 @@ const Login = () => {
   const bio = useInputValidation("");
   const username = useInputValidation("", usernameValidator);
   const password = useInputValidation("");
+  const otp = useInputValidation("");
   const avatar = useFileHandler("single");
 
   const toggleLogin = () => {
     setIsLogin((prev) => !prev);
     setShowPassword(false);
     setAvatarMissing(false);
+  };
+
+  const openForgot = (step) => {
+    setIsLogin(true);
+    setShowPassword(false);
+    setForgotStep(step);
+  };
+
+  const requestResetCode = async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await axios.post(`${server}/api/v1/user/forgot-password`, { email: email.value }, {
+        headers: { "Content-Type": "application/json" }
+      });
+      toast.success(data.message);
+      setForgotStep("reset");
+    } catch (ex) {
+      toast.error(ex?.response?.data?.message || "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgot = (e) => {
+    e.preventDefault();
+    requestResetCode();
+  };
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const { data } = await axios.post(`${server}/api/v1/user/reset-password`, {
+        email: email.value,
+        otp: otp.value,
+        password: password.value,
+      }, {
+        headers: { "Content-Type": "application/json" }
+      });
+      toast.success(data.message);
+      openForgot(null);
+    } catch (ex) {
+      toast.error(ex?.response?.data?.message || "Something went wrong");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -143,9 +193,9 @@ const Login = () => {
     <TextField
       required
       fullWidth
-      label="Password"
+      label={forgotStep ? "New password" : "Password"}
       type={showPassword ? "text" : "password"}
-      autoComplete={isLogin ? "current-password" : "new-password"}
+      autoComplete={isLogin && !forgotStep ? "current-password" : "new-password"}
       value={password.value}
       onChange={password.changeHandler}
       sx={fieldSx}
@@ -181,6 +231,33 @@ const Login = () => {
       InputProps={{ startAdornment: iconAdornment(AtIcon) }}
     />
   );
+
+  const emailField = (
+    <TextField
+      required
+      fullWidth
+      type="email"
+      label="Email"
+      autoComplete="email"
+      value={email.value}
+      onChange={email.changeHandler}
+      sx={fieldSx}
+      inputProps={{ maxLength: 254 }}
+      InputProps={{ startAdornment: iconAdornment(MailIcon) }}
+    />
+  );
+
+  const linkButtonSx = {
+    border: "none",
+    background: "none",
+    p: 0,
+    font: "inherit",
+    fontWeight: 600,
+    color: accentDark,
+    cursor: "pointer",
+    "&:hover": { textDecoration: "underline" },
+    "&:disabled": { opacity: 0.6, cursor: "default" },
+  };
 
   const submitButton = (label, loadingLabel) => (
     <Button
@@ -284,24 +361,68 @@ const Login = () => {
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={isLogin ? "login" : "signup"}
+              key={forgotStep ? `forgot-${forgotStep}` : isLogin ? "login" : "signup"}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -12 }}
               transition={{ duration: 0.2 }}
             >
               <Typography variant="h4" fontWeight={700} fontSize={{ xs: "1.75rem", sm: "2rem" }}>
-                {isLogin ? "Welcome back" : "Create account"}
+                {forgotStep ? "Reset password" : isLogin ? "Welcome back" : "Create account"}
               </Typography>
               <Typography color="text.secondary" mt={0.5} mb={3}>
-                {isLogin ? "Log in to continue your conversations." : "Join BuzzChat in less than a minute."}
+                {forgotStep === "email"
+                  ? "Enter your account email and we'll send you a 6-digit code."
+                  : forgotStep === "reset"
+                    ? `Enter the code sent to ${email.value} and choose a new password.`
+                    : isLogin ? "Log in to continue your conversations." : "Join BuzzChat in less than a minute."}
               </Typography>
 
-              {isLogin ? (
+              {forgotStep === "email" ? (
+                <form onSubmit={handleForgot}>
+                  <Stack spacing={2}>
+                    {emailField}
+                    {submitButton("Send code", "Sending code")}
+                  </Stack>
+                </form>
+              ) : forgotStep === "reset" ? (
+                <form onSubmit={handleReset}>
+                  <Stack spacing={2}>
+                    <TextField
+                      required
+                      fullWidth
+                      label="6-digit code"
+                      autoComplete="one-time-code"
+                      value={otp.value}
+                      onChange={otp.changeHandler}
+                      sx={fieldSx}
+                      inputProps={{ maxLength: 6, inputMode: "numeric", pattern: "[0-9]{6}" }}
+                      InputProps={{ startAdornment: iconAdornment(PinIcon) }}
+                    />
+                    {passwordField}
+                    {submitButton("Reset password", "Resetting password")}
+                    <Typography textAlign="center" variant="body2" color="text.secondary">
+                      Didn't get it?{" "}
+                      <Box component="button" type="button" onClick={requestResetCode} disabled={isLoading} sx={linkButtonSx}>
+                        Resend code
+                      </Box>
+                      {" · "}
+                      <Box component="button" type="button" onClick={() => openForgot("email")} disabled={isLoading} sx={linkButtonSx}>
+                        Change email
+                      </Box>
+                    </Typography>
+                  </Stack>
+                </form>
+              ) : isLogin ? (
                 <form onSubmit={handleLogin}>
                   <Stack spacing={2}>
                     {usernameField}
                     {passwordField}
+                    <Box sx={{ textAlign: "right", mt: "8px !important" }}>
+                      <Box component="button" type="button" onClick={() => openForgot("email")} disabled={isLoading} sx={{ ...linkButtonSx, fontSize: "0.875rem" }}>
+                        Forgot password?
+                      </Box>
+                    </Box>
                     {submitButton("Log in", "Logging in")}
                   </Stack>
                 </form>
@@ -370,18 +491,7 @@ const Login = () => {
                         inputProps={{ maxLength: 50 }}
                       />
                     </Stack>
-                    <TextField
-                      required
-                      fullWidth
-                      type="email"
-                      label="Email"
-                      autoComplete="email"
-                      value={email.value}
-                      onChange={email.changeHandler}
-                      sx={fieldSx}
-                      inputProps={{ maxLength: 254 }}
-                      InputProps={{ startAdornment: iconAdornment(MailIcon) }}
-                    />
+                    {emailField}
                     {usernameField}
                     <TextField
                       required
@@ -402,24 +512,15 @@ const Login = () => {
               )}
 
               <Typography textAlign="center" color="text.secondary" mt={3}>
-                {isLogin ? "New to BuzzChat?" : "Already have an account?"}{" "}
+                {forgotStep ? "Remembered it?" : isLogin ? "New to BuzzChat?" : "Already have an account?"}{" "}
                 <Box
                   component="button"
                   type="button"
-                  onClick={toggleLogin}
+                  onClick={forgotStep ? () => openForgot(null) : toggleLogin}
                   disabled={isLoading}
-                  sx={{
-                    border: "none",
-                    background: "none",
-                    p: 0,
-                    font: "inherit",
-                    fontWeight: 600,
-                    color: accentDark,
-                    cursor: "pointer",
-                    "&:hover": { textDecoration: "underline" },
-                  }}
+                  sx={linkButtonSx}
                 >
-                  {isLogin ? "Create an account" : "Log in"}
+                  {forgotStep || !isLogin ? "Log in" : "Create an account"}
                 </Box>
               </Typography>
             </motion.div>

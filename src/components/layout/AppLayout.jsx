@@ -112,6 +112,11 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       dispatch(api.util.invalidateTags(["Notifications"]));
     }, [dispatch]);
 
+    // A new in-app notification: refresh the bell's list and unread count
+    const newNotificationListener = useCallback(() => {
+      dispatch(api.util.invalidateTags(["Activity"]));
+    }, [dispatch]);
+
     // Only leave the open chat if it no longer exists (deleted, or you were removed).
     // With a partial list the chat may just be on a later page, so only check a complete one.
     const refetchListener = useCallback(async () => {
@@ -162,6 +167,7 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       MESSAGE_DELETED: changedMessageListener,
       NEW_MESSAGE_ALERT: newMessageAlertListener,
       NEW_REQUEST: newRequestAlertListener,
+      NEW_NOTIFICATION: newNotificationListener,
       REFETCH_CHATS: refetchListener,
       ONLINE_USERS: onlineUsersListener,
     };

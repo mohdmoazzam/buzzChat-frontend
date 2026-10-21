@@ -32,7 +32,7 @@ import { server } from "../../constants/config";
 import { brandGradient } from "../../constants/theme";
 import { fullName, transformImage } from "../../lib/features";
 import { userNotExists } from "../../redux/reducers/auth";
-import { useGetNotificationsQuery } from "../../redux/api/api";
+import { useGetActivityQuery, useGetNotificationsQuery } from "../../redux/api/api";
 import {
   setIsMobileMenu,
   setIsNewGroup,
@@ -51,7 +51,9 @@ const Header = () => {
   );
   // Pending friend requests, from the server (refetched on NEW_REQUEST), so the badge survives a reload
   const { data: notifications } = useGetNotificationsQuery();
-  const notificationCount = notifications?.data?.length ?? 0;
+  // Unread in-app notifications (refetched on NEW_NOTIFICATION)
+  const { data: activity } = useGetActivityQuery();
+  const notificationCount = (notifications?.data?.length ?? 0) + (activity?.unread_count ?? 0);
   const { user } = useSelector((state) => state.auth);
   const [accountAnchor, setAccountAnchor] = useState(null);
   const bellRef = useRef(null);

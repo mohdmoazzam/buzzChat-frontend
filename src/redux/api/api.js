@@ -15,7 +15,7 @@ const api = createApi({
             }
         }
     }),
-    tagTypes: ["Chat", "Notifications"],
+    tagTypes: ["Chat", "Notifications", "Activity"],
     // Refresh data when the tab regains focus or the network comes back
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -83,6 +83,25 @@ const api = createApi({
             }),
             keepUnusedDataFor: 0,
             providesTags: ["Notifications"],
+        }),
+
+        // In-app notifications (friend accepted, added to a group, ...) with the unread count
+        getActivity: builder.query({
+            query: ({ take = 20 } = {}) => ({
+                url: "notifications",
+                params: { take },
+                credentials: "include"
+            }),
+            providesTags: ["Activity"],
+        }),
+
+        markAllActivityRead: builder.mutation({
+            query: () => ({
+                url: "notifications/read-all",
+                method: "PATCH",
+                credentials: "include"
+            }),
+            invalidatesTags: ["Activity"],
         }),
 
         getChatDetails: builder.query({
@@ -270,6 +289,8 @@ export const {
     useSendFriendRequestMutation,
     useGetNotificationsQuery,
     useAcceptFriendRequestMutation,
+    useGetActivityQuery,
+    useMarkAllActivityReadMutation,
     useGetChatDetailsQuery,
     useGetChatMessagesQuery,
     useSendAttachmentsMutation,
