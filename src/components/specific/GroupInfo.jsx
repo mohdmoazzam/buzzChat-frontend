@@ -25,7 +25,9 @@ import {
 } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import { setProfileUserId } from "../../redux/reducers/misc";
 import { transformImage } from "../../lib/features";
 import { useDeleteChatMutation, useGroupMembersQuery, useLeaveGroupMutation } from "../../redux/api/api";
 import ConfirmDeleteDialog from "../dialogs/ConfirmDeleteDialog";
@@ -114,8 +116,8 @@ export const useGroupActions = ({ chatId, chat, currentUserId, panelOpen }) => {
   return { isAdmin, canLeave, leaveBlockedReason, requestLeave, requestDelete: () => setConfirm("delete"), dialogs, members };
 };
 
-const MemberRow = ({ member, isMe, online }) => (
-  <ListItem sx={{ px: 3 }}>
+const MemberRow = ({ member, isMe, online, onOpen }) => (
+  <ListItemButton onClick={() => onOpen(member.id)} sx={{ px: 3 }}>
     <ListItemAvatar>
       <Badge
         overlap="circular"
@@ -138,7 +140,7 @@ const MemberRow = ({ member, isMe, online }) => (
         Admin
       </Typography>
     )}
-  </ListItem>
+  </ListItemButton>
 );
 
 const ActionRow = ({ icon, label, hint, onClick, danger, disabled }) => (
@@ -157,6 +159,7 @@ const ActionRow = ({ icon, label, hint, onClick, danger, disabled }) => (
 // Right-hand panel (full screen on phones): the group, its members, and leaving it
 const GroupInfoPanel = ({ open, onClose, chatId, chat, currentUserId, onlineUsers = [], actions }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { members, total, hasMore, isLoading, isLoadingMore, loadMore } = actions.members;
   const count = total ?? chat?.members?.length ?? 0;
 
@@ -220,7 +223,7 @@ const GroupInfoPanel = ({ open, onClose, chatId, chat, currentUserId, onlineUser
               ))
             : members.map((member) => {
                 const isMe = member.id === currentUserId;
-                return <MemberRow key={member.id} member={member} isMe={isMe} online={isMe || onlineUsers.includes(member.id)} />;
+                return <MemberRow key={member.id} member={member} isMe={isMe} online={isMe || onlineUsers.includes(member.id)} onOpen={(id) => dispatch(setProfileUserId(id))} />;
               })}
         </List>
         {hasMore && (

@@ -4,14 +4,17 @@ import {
   CheckCircleRounded as CheckIcon,
   ErrorRounded as ErrorIcon,
   PhoneOutlined as PhoneIcon,
+  LockOutlined as LockIcon,
+  DeleteOutlineRounded as DeleteIcon,
 } from "@mui/icons-material";
-import { Avatar, Box, Button, CircularProgress, Divider, IconButton, InputBase, Stack, Typography } from "@mui/material";
+import { Avatar, Box, Button, CircularProgress, Divider, IconButton, InputBase, Stack, Tooltip, Typography } from "@mui/material";
 import React, { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import AppLayout from "../components/layout/AppLayout";
 import { ButtonLoader } from "../components/layout/Loaders";
+import ProfileCover from "../components/shared/ProfileCover";
 import Title from "../components/shared/Title";
 import { VisuallyHiddenInput } from "../components/styles/StyledComponent";
 import { orange } from "../constants/color";
@@ -67,6 +70,9 @@ const fieldSx = (state) => {
   };
 };
 
+// The round buttons on the cover band
+const coverIconSx = { bgcolor: "rgba(255,255,255,0.8)", backdropFilter: "blur(6px)", color: "text.primary", "&:hover": { bgcolor: "#fff" } };
+
 const Field = ({ label, htmlFor, aside, helper, helperColor = "text.secondary", children }) => (
   <Box>
     <Stack direction="row" justifyContent="space-between" alignItems="baseline" mb={0.75}>
@@ -102,6 +108,10 @@ const EditProfile = () => {
   const [bio, setBio] = useState(user?.bio ?? "");
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
+  // Cover: a new file (with its preview), or removing the current one
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState("");
+  const [coverRemoved, setCoverRemoved] = useState(false);
   const [touched, setTouched] = useState({ firstName: false, bio: false, phone: false });
   const [username, setUsername] = useState(user?.username ?? "");
   const [gender, setGender] = useState(user?.gender ?? "");
@@ -116,6 +126,7 @@ const EditProfile = () => {
   const latestCheck = useRef(0);
 
   useEffect(() => () => avatarPreview && URL.revokeObjectURL(avatarPreview), [avatarPreview]);
+  useEffect(() => () => coverPreview && URL.revokeObjectURL(coverPreview), [coverPreview]);
 
   // Debounced availability check against the backend
   useEffect(() => {
@@ -152,7 +163,9 @@ const EditProfile = () => {
     usernameChanged ||
     gender !== (user?.gender ?? "") ||
     phoneChanged ||
-    !!avatarFile;
+    !!avatarFile ||
+    !!coverFile ||
+    coverRemoved;
   const canSave = isDirty && !nameError && !bioError && !phoneError && usernameOk && !isLoading;
 
   const avatarChangeHandler = (e) => {
@@ -170,6 +183,34 @@ const EditProfile = () => {
     setAvatarPreview("");
   };
 
+  const coverChangeHandler = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) return toast.error("Please choose an image file");
+    if (file.size > MAX_AVATAR_MB * 1024 * 1024) return toast.error(`Image must be under ${MAX_AVATAR_MB}MB`);
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+    setCoverRemoved(false);
+  };
+
+  // Drops a new cover if one was picked, otherwise marks the saved one for removal
+  const removeCover = () => {
+    if (coverFile) {
+      setCoverFile(null);
+      setCoverPreview("");
+      return;
+    }
+    setCoverRemoved(true);
+  };
+
+  const resetCover = () => {
+    setCoverFile(null);
+    setCoverPreview("");
+    setCoverRemoved(false);
+  };
+  const hasCover = !!coverPreview || (!!user?.cover?.url && !coverRemoved);
+
   const discardChanges = () => {
     setFirstName(user?.first_name ?? "");
     setLastName(user?.last_name ?? "");
@@ -179,6 +220,7 @@ const EditProfile = () => {
     setPhone(user?.phone ?? "");
     setTouched({ firstName: false, bio: false, phone: false });
     resetAvatar();
+    resetCover();
   };
 
   const submitHandler = async (e) => {
@@ -198,6 +240,13 @@ const EditProfile = () => {
       const uploaded = await uploadAssets([avatarFile]);
       if (!uploaded.data) return toast.error(uploaded.error?.data?.message || "Couldn't upload your photo");
       changes.avatar_id = uploaded.data.assets[0].id;
+    }
+    if (coverFile) {
+      const uploaded = await uploadAssets([coverFile]);
+      if (!uploaded.data) return toast.error(uploaded.error?.data?.message || "Couldn't upload your cover");
+      changes.cover_id = uploaded.data.assets[0].id;
+    } else if (coverRemoved) {
+      changes.cover_id = null;
     }
 
     const response = await updateProfile(changes);
@@ -227,13 +276,11 @@ const EditProfile = () => {
         noValidate
         sx={{ flex: 1, minHeight: 0, overflowY: "auto" }}
       >
-        {/* Header band */}
-        <Box
-          sx={{
-            height: { xs: 96, sm: 120 },
-            background: "linear-gradient(120deg, #fde7e4 0%, #fbe3ee 55%, #efe8fb 100%)",
-            position: "relative",
-          }}
+        {/* Header band: the cover image (or the gradient), changed in place */}
+        <ProfileCover
+          src={coverRemoved ? null : user?.cover?.url}
+          preview={coverPreview}
+          height={{ xs: 140, sm: 180 }}
         >
           <IconButton
             onClick={() => navigate("/profile")}
@@ -249,7 +296,23 @@ const EditProfile = () => {
           >
             <ArrowBackIcon fontSize="small" />
           </IconButton>
-        </Box>
+          <Stack direction="row" spacing={1} sx={{ position: "absolute", top: 16, right: { xs: 16, sm: 40 } }}>
+            {/* Icons only (labels in the tooltips and for screen readers) */}
+            <Tooltip title={hasCover ? "Change cover" : "Add cover"}>
+              <IconButton component="label" aria-label={hasCover ? "Change cover" : "Add cover"} sx={coverIconSx}>
+                <CameraIcon fontSize="small" />
+                <VisuallyHiddenInput type="file" accept="image/*" onChange={coverChangeHandler} />
+              </IconButton>
+            </Tooltip>
+            {hasCover && (
+              <Tooltip title="Remove cover">
+                <IconButton onClick={removeCover} aria-label="Remove cover" sx={coverIconSx}>
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Stack>
+        </ProfileCover>
 
         <Box sx={{ px: { xs: 2.5, sm: 6 } }}>
           {/* Identity row with overlapping avatar */}
@@ -381,6 +444,29 @@ const EditProfile = () => {
                   </Box>
                 }
                 sx={fieldSx(usernameBad ? "error" : usernameStatus === "available" ? "success" : null)}
+              />
+            </Field>
+
+            {/* Shown for reference only: the email can't be changed here (it's what codes are sent to) */}
+            <Field
+              label="Email"
+              htmlFor="profile-email"
+              aside={<Typography variant="caption" color="text.disabled">Can't be changed</Typography>}
+            >
+              <InputBase
+                id="profile-email"
+                value={user?.email ?? ""}
+                readOnly
+                inputProps={{ "aria-readonly": true, tabIndex: -1 }}
+                endAdornment={<LockIcon sx={{ fontSize: 18, color: "text.disabled", ml: 1 }} />}
+                sx={{
+                  ...fieldSx(null),
+                  bgcolor: "#f6f6f8",
+                  color: "text.secondary",
+                  cursor: "default",
+                  "&:hover": { borderColor: "transparent" },
+                  "& input": { cursor: "default" },
+                }}
               />
             </Field>
           </Section>
