@@ -5,10 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useErrors, useSocketsEvents } from "../../hooks/hook";
 import { getOrSaveFromLocalStorage } from "../../lib/features";
 import api, { CHAT_PAGE_SIZE, useMyChatsQuery } from "../../redux/api/api";
-import {
-  incrementNotification,
-  setNewMessagesAlert,
-} from "../../redux/reducers/chat";
+import { setNewMessagesAlert } from "../../redux/reducers/chat";
 import {
   setIsDeleteMenu,
   setIsMobileMenu,
@@ -110,8 +107,9 @@ const AppLayout = ({ showListOnMobile = true } = {}) => (WrappedComponent) => {
       [chatId]
     );
 
+    // The bell's badge reads the pending requests, so just refresh them
     const newRequestAlertListener = useCallback(() => {
-      dispatch(incrementNotification());
+      dispatch(api.util.invalidateTags(["Notifications"]));
     }, [dispatch]);
 
     // Only leave the open chat if it no longer exists (deleted, or you were removed).
