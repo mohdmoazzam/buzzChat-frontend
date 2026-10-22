@@ -3,6 +3,7 @@ import {
   BlockRounded as BlockIcon,
   DescriptionRounded as FileIcon,
   ImageRounded as ImageIcon,
+  MicRounded as MicIcon,
   VideocamRounded as VideoIcon,
 } from '@mui/icons-material';
 import { Box, Stack, Typography } from '@mui/material';
@@ -12,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { orange } from '../../constants/color';
 import { accentSoft } from '../../constants/theme';
 import { fileFormat, formatChatTime } from '../../lib/features';
+import { formatDuration, isVoice } from '../../lib/voice';
 import AvatarCard from './AvatarCard';
 
 const ATTACHMENT_LABELS = {
@@ -19,6 +21,7 @@ const ATTACHMENT_LABELS = {
   video: { label: "Video", Icon: VideoIcon },
   audio: { label: "Audio", Icon: AudioIcon },
   file: { label: "File", Icon: FileIcon },
+  voice: { label: "Voice message", Icon: MicIcon },
 };
 
 // "You: hi", "Aisha: hi" (groups), "📷 Photo", or a group/online hint when empty
@@ -43,8 +46,11 @@ const Preview = ({ lastMessage, groupChat, isOnline, unread, myId }) => {
   const attachments = lastMessage.attachments ?? [];
 
   if (!lastMessage.content && attachments.length) {
-    const { label, Icon } = ATTACHMENT_LABELS[fileFormat(attachments[0].url)] ?? ATTACHMENT_LABELS.file;
-    const text = attachments.length > 1 ? `${attachments.length} ${label === "Audio" ? "audio files" : `${label.toLowerCase()}s`}` : label;
+    const voice = isVoice(attachments[0]);
+    const { label, Icon } = voice ? ATTACHMENT_LABELS.voice : ATTACHMENT_LABELS[fileFormat(attachments[0].url)] ?? ATTACHMENT_LABELS.file;
+    const text = voice
+      ? `${label} (${formatDuration(attachments[0].duration_ms)})`
+      : attachments.length > 1 ? `${attachments.length} ${label === "Audio" ? "audio files" : `${label.toLowerCase()}s`}` : label;
     return (
       <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
         {prefix}
