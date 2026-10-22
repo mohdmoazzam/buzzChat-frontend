@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { userExists, userNotExists } from './redux/reducers/auth';
 import { Toaster } from "react-hot-toast";
 import { SocketProvider } from './socket';
+import PushBridge from './components/specific/PushBridge';
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
 const Chat = lazy(() => import("./pages/Chat"));
@@ -21,6 +22,7 @@ const DeleteAccount = lazy(() => import("./pages/DeleteAccount"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const JoinGroup = lazy(() => import("./pages/JoinGroup"));
+const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 
 // Old /groups links (including ?group=) now live under settings
 const GroupsRedirect = () => <Navigate to={`/settings/groups${useLocation().search}`} replace />;
@@ -60,7 +62,7 @@ const App = () => {
           <Routes>
 
             {/* Guard outside the socket: the server refuses unverified sockets, which would log them out */}
-            <Route element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><SocketProvider><Outlet /></SocketProvider></ProtectRoute>} >
+            <Route element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><SocketProvider><PushBridge /><Outlet /></SocketProvider></ProtectRoute>} >
               <Route path='/' element={<ProtectRoute user={verifiedUser} redirect={appRedirect}><Home /></ProtectRoute>} />
               <Route path='/chat/:chatId' element={<Chat />} />
               <Route path='/profile' element={<Profile />} />
@@ -70,6 +72,7 @@ const App = () => {
               <Route path='/settings/profile' element={<EditProfile />} />
               <Route path='/settings/password' element={<ChangePassword />} />
               <Route path='/settings/devices' element={<Devices />} />
+              <Route path='/settings/notifications' element={<NotificationSettings />} />
               <Route path='/settings/groups' element={<Group />} />
               <Route path='/settings/delete-account' element={<DeleteAccount />} />
               <Route path='/groups' element={<GroupsRedirect />} />

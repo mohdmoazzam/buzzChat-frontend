@@ -1,0 +1,17 @@
+{
+  "name": "BuzzChat",
+  "short_name": "BuzzChat",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f6f8",
+  "theme_color": "#ea7070",
+  "icons": [
+    {
+      "src": "/message_4140377.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
