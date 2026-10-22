@@ -9,6 +9,7 @@ import {
   EditRounded as EditIcon,
   ExitToAppRounded as LeaveIcon,
   InfoOutlined as InfoIcon,
+  MicRounded as MicIcon,
   TimerOutlined as TimerIcon,
   ReplyRounded as ReplyIcon,
   MoreVertRounded as MoreIcon,
@@ -28,6 +29,7 @@ import FileMenu from "../components/dialogs/FileMenu";
 import ForwardDialog from "../components/dialogs/ForwardDialog";
 import GroupInfoPanel, { useGroupActions } from "../components/specific/GroupInfo";
 import DisappearingDialog, { disappearingLabel } from "../components/dialogs/DisappearingDialog";
+import VoiceRecorder from "../components/specific/VoiceRecorder";
 
 // The chat details say whether it's a group
 const isGroupChat = (details) => !!details?.group_chat;
@@ -104,6 +106,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   if (history.chatId !== chatId) setHistory({ chatId, cursor: null });
   const historyCursor = history.chatId === chatId ? history.cursor : null;
   const [fileMenuAnchor, setFileMenuAnchor] = useState(null);
+  // The composer row is the voice recorder while this is on
+  const [recordingVoice, setRecordingVoice] = useState(false);
   const [iamTyping, setIamTyping] = useState(false);
   // Who else is typing here: { [user_id]: first_name } (groups can have several at once)
   const [typingUsers, setTypingUsers] = useState({});
@@ -491,6 +495,7 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       setReplyingTo(null);
       setDeleteTarget(null);
       setForwardTarget(null);
+      setRecordingVoice(false);
       setReceipts({});
       draftBeforeEdit.current = "";
       socket.emit("CHAT_LEAVED");
@@ -1146,6 +1151,14 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             </IconButton>
           </Stack>
         )}
+        {recordingVoice ? (
+          <VoiceRecorder
+            chatId={chatId}
+            replyToId={replyingTo?.id}
+            onSent={() => setReplyingTo(null)}
+            onClose={() => setRecordingVoice(false)}
+          />
+        ) : (
         <Stack direction="row" alignItems="flex-end" spacing={1}>
           <Tooltip title={isFileMenu ? "" : uploadingLoader ? "Sending files…" : "Attach files"} disableInteractive>
             <span>
@@ -1191,6 +1204,27 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
             }}
           />
 
+          {/* An empty box offers a voice message instead of send */}
+          {!canSend && !editing ? (
+            <Tooltip title="Record voice message" disableInteractive>
+              <IconButton
+                onClick={() => setRecordingVoice(true)}
+                aria-label="Record voice message"
+                sx={{
+                  bgcolor: orange,
+                  color: "#fff",
+                  width: 42,
+                  height: 42,
+                  flexShrink: 0,
+                  transition: "transform 0.15s, background-color 0.15s",
+                  "&:hover": { bgcolor: accentDark },
+                  "&:active": { transform: "scale(0.92)" },
+                }}
+              >
+                <MicIcon sx={{ fontSize: 22 }} />
+              </IconButton>
+            </Tooltip>
+          ) : (
           <IconButton
             type="submit"
             aria-label="Send message"
@@ -1213,9 +1247,11 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
               <SendIcon sx={{ fontSize: 20, ml: "2px" }} />
             )}
           </IconButton>
+          )}
         </Stack>
+        )}
         <Typography variant="caption" color="text.disabled" sx={{ display: { xs: "none", md: "block" }, pl: "58px", pt: 0.5, fontSize: "0.7rem" }}>
-          {editing ? "Enter to save · Esc to cancel" : "Enter to send · Shift + Enter for a new line"}
+          {recordingVoice ? "Recording · Esc to delete" : editing ? "Enter to save · Esc to cancel" : "Enter to send · Shift + Enter for a new line"}
         </Typography>
       </Box>
 

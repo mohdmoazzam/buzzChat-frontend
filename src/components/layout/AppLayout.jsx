@@ -28,7 +28,7 @@ const toPreview = (message) => ({
   id: message.id,
   content: message.content ?? "",
   deleted_at: message.deleted_at ?? null,
-  attachments: (message.attachments ?? []).map(({ url }) => ({ url })),
+  attachments: (message.attachments ?? []).map(({ url, duration_ms }) => ({ url, duration_ms })),
   created_at: message.created_at,
   sender: message.sender ?? null,
 });

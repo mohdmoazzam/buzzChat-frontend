@@ -247,6 +247,17 @@ const api = createApi({
             },
         }),
 
+        // A recorded voice message: { file, duration_ms, waveform }; send the returned asset id like any attachment
+        uploadVoice: builder.mutation({
+            query: ({ file, duration_ms, waveform }) => {
+                const body = new FormData();
+                body.append("file", file);
+                body.append("duration_ms", String(duration_ms));
+                body.append("waveform", waveform.join(","));
+                return { url: "assets/voice", method: "POST", credentials: "include", body };
+            },
+        }),
+
         // { chat_id, attachment_ids }
         sendAttachments: builder.mutation({
             query: ({ chat_id, attachment_ids, reply_to_id }) => ({
@@ -501,6 +512,7 @@ export const {
     useGroupMembersQuery,
     useSendAttachmentsMutation,
     useUploadAssetsMutation,
+    useUploadVoiceMutation,
     useEditMessageMutation,
     useReactToMessageMutation,
     useDeleteMessageMutation,

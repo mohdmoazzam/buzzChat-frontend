@@ -10,8 +10,10 @@ import React, { memo, useRef, useState } from 'react';
 import moment from 'moment';
 import { lightBlue, myBubble } from '../../constants/color';
 import { fileFormat, fullName } from '../../lib/features';
+import { formatDuration, isVoice } from '../../lib/voice';
 import Emoji from './Emoji';
 import RenderAttachment from './RenderAttachment';
+import VoiceMessage from './VoiceMessage';
 
 const BIG = "18px";
 const SMALL = "6px";
@@ -45,6 +47,7 @@ const ATTACHMENT_LABELS = { image: "📷 Photo", video: "🎥 Video", audio: "�
 export const replySnippet = ({ content, attachment, deleted }) => {
     if (deleted) return "Deleted message";
     if (content) return content;
+    if (isVoice(attachment)) return `🎤 Voice message (${formatDuration(attachment.duration_ms)})`;
     return attachment?.url ? ATTACHMENT_LABELS[fileFormat(attachment.url)] : "Message";
 };
 
@@ -333,7 +336,8 @@ const MessageComponent = ({
     const mine = !!user?.id && sender?.id === user.id;
     const time = moment(created_at).format("h:mm A");
     const deleted = !!deleted_at;
-    const onlyAttachments = !deleted && attachments.length > 0 && !content;
+    // Voice messages keep their bubble (the player sits inside it), like text
+    const onlyAttachments = !deleted && attachments.length > 0 && !content && !attachments.every(isVoice);
 
     // Attachment-only messages render bare, without a coloured bubble; deleted ones are muted
     const bubbleColor = deleted ? "#f4f4f6" : onlyAttachments ? "transparent" : mine ? myBubble : "#fff";
@@ -448,6 +452,9 @@ const MessageComponent = ({
 
                 {!deleted && attachments.map((attachment, index) => {
                     const url = attachment.url;
+                    if (isVoice(attachment)) {
+                        return <VoiceMessage key={index} asset={attachment} mine={mine} />;
+                    }
                     const file = fileFormat(url);
                     return (
                         <Box
