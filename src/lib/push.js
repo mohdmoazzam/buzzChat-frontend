@@ -60,6 +60,41 @@ const save = (subscription, token) => {
   return axios.post(`${server}/api/v1/push/subscription`, { endpoint, p256dh: keys.p256dh, auth: keys.auth }, authed(token));
 };
 
+// "Not now" on the turn-on prompt hides it for a while
+const PROMPT_SNOOZE_KEY = "push_prompt_snoozed_until";
+const PROMPT_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export const snoozePushPrompt = () => {
+  try {
+    localStorage.setItem(PROMPT_SNOOZE_KEY, String(Date.now() + PROMPT_SNOOZE_MS));
+  } catch {
+    // Storage blocked: the prompt comes back next visit
+  }
+};
+
+const promptSnoozed = () => {
+  try {
+    return Number(localStorage.getItem(PROMPT_SNOOZE_KEY)) > Date.now();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Whether to offer turning push on: the browser supports it and hasn't blocked it, it isn't on
+ * for this account yet, the server has push set up, and the user didn't just say "Not now".
+ */
+export const shouldPromptForPush = async ({ token, userId }) => {
+  if (!pushSupported() || Notification.permission === "denied" || promptSnoozed()) return false;
+  if (await isPushOn(userId)) return false;
+  try {
+    const { data } = await axios.get(`${server}/api/v1/push/public-key`, authed(token));
+    return !!data.public_key;
+  } catch {
+    return false;
+  }
+};
+
 const messageOf = (error) => error?.response?.data?.message || error?.message || "Something went wrong";
 
 /** Whether push is on in this browser for this account. */
