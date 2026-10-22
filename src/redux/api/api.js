@@ -51,7 +51,7 @@ const baseQuery = async (args, queryApi, extraOptions) => {
 const api = createApi({
     reducerPath: "api",
     baseQuery,
-    tagTypes: ["Chat", "Notifications", "Activity", "Unread", "Sessions"],
+    tagTypes: ["Chat", "Notifications", "Activity", "Unread", "Sessions", "Invite"],
     // Refresh data when the tab regains focus or the network comes back
     refetchOnFocus: true,
     refetchOnReconnect: true,
@@ -374,6 +374,35 @@ const api = createApi({
             invalidatesTags: ["Chat"]
         }),
 
+        // Invite links: the admin's view of the group's link ({ invite: { code, expires_at } | null })
+        groupInvite: builder.query({
+            query: (chatId) => ({ url: `chat/${chatId}/invite`, credentials: "include" }),
+            keepUnusedDataFor: 0,
+            providesTags: ["Invite"],
+        }),
+
+        // { chatId, seconds }: creates the link, or resets it with a new code
+        createGroupInvite: builder.mutation({
+            query: ({ chatId, seconds }) => ({ url: `chat/${chatId}/invite`, method: "POST", credentials: "include", body: { seconds } }),
+            invalidatesTags: ["Invite"],
+        }),
+
+        revokeGroupInvite: builder.mutation({
+            query: (chatId) => ({ url: `chat/${chatId}/invite`, method: "DELETE", credentials: "include" }),
+            invalidatesTags: ["Invite"],
+        }),
+
+        // The join page: which group a code opens, and whether you're already in it
+        invitePreview: builder.query({
+            query: (code) => ({ url: `chat/invites/${encodeURIComponent(code)}`, credentials: "include" }),
+            keepUnusedDataFor: 0,
+        }),
+
+        joinWithInvite: builder.mutation({
+            query: (code) => ({ url: `chat/invites/${encodeURIComponent(code)}/join`, method: "POST", credentials: "include" }),
+            invalidatesTags: [CHAT_LISTS],
+        }),
+
         deleteChat: builder.mutation({
             query: (chatId ) => ({
                 url: `chat/${chatId}`,
@@ -484,6 +513,11 @@ export const {
     useRenameGroupMutation,
     useRemoveGroupMemberMutation,
     useAddGroupMembersMutation,
+    useGroupInviteQuery,
+    useCreateGroupInviteMutation,
+    useRevokeGroupInviteMutation,
+    useInvitePreviewQuery,
+    useJoinWithInviteMutation,
     useDeleteChatMutation,
     useLeaveGroupMutation,
     useUpdateProfileMutation,

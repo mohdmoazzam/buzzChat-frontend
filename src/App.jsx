@@ -20,6 +20,7 @@ const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const DeleteAccount = lazy(() => import("./pages/DeleteAccount"));
 const VerifyEmail = lazy(() => import("./pages/VerifyEmail"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const JoinGroup = lazy(() => import("./pages/JoinGroup"));
 
 // Old /groups links (including ?group=) now live under settings
 const GroupsRedirect = () => <Navigate to={`/settings/groups${useLocation().search}`} replace />;
@@ -64,6 +65,7 @@ const App = () => {
               <Route path='/chat/:chatId' element={<Chat />} />
               <Route path='/profile' element={<Profile />} />
               <Route path='/notifications' element={<Notifications />} />
+              <Route path='/join/:code' element={<JoinGroup />} />
               <Route path='/settings' element={<Navigate to='/settings/profile' replace />} />
               <Route path='/settings/profile' element={<EditProfile />} />
               <Route path='/settings/password' element={<ChangePassword />} />
@@ -75,8 +77,8 @@ const App = () => {
               <Route path='/profile/devices' element={<Navigate to='/settings/devices' replace />} />
             </Route>
 
-            <Route path='/login' element={<ProtectRoute user={!user} redirect='/'><Login /></ProtectRoute>} />
-            <Route path='/verify-email' element={<ProtectRoute user={user && !verifiedUser} redirect={user ? '/' : '/login'}><VerifyEmail /></ProtectRoute>} />
+            <Route path='/login' element={<ProtectRoute user={!user} redirect='/' returnToFrom><Login /></ProtectRoute>} />
+            <Route path='/verify-email' element={<ProtectRoute user={user && !verifiedUser} redirect={user ? '/' : '/login'} returnToFrom><VerifyEmail /></ProtectRoute>} />
             <Route path='/admin' element={<AdminLogin />} />
             <Route path='/admin/dashboard' element={<Dashboard />} />
             <Route path='/admin/users' element={<UserManagement />} />

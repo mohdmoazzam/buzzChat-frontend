@@ -2,6 +2,7 @@ import {
   CloseRounded as CloseIcon,
   DeleteOutlineRounded as DeleteIcon,
   ExitToAppRounded as LeaveIcon,
+  LinkRounded as LinkIcon,
   SettingsOutlined as ManageIcon,
 } from "@mui/icons-material";
 import {
@@ -31,6 +32,7 @@ import { setProfileUserId } from "../../redux/reducers/misc";
 import { transformImage } from "../../lib/features";
 import { useDeleteChatMutation, useGroupMembersQuery, useLeaveGroupMutation } from "../../redux/api/api";
 import ConfirmDeleteDialog from "../dialogs/ConfirmDeleteDialog";
+import InviteLinkDialog from "../dialogs/InviteLinkDialog";
 import AvatarCard from "../shared/AvatarCard";
 
 // Same rule as the server (GROUP_MIN_MEMBERS): leaving can't drop a group below this
@@ -160,6 +162,7 @@ const ActionRow = ({ icon, label, hint, onClick, danger, disabled }) => (
 const GroupInfoPanel = ({ open, onClose, chatId, chat, currentUserId, onlineUsers = [], actions }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const [inviteOpen, setInviteOpen] = useState(false);
   const { members, total, hasMore, isLoading, isLoadingMore, loadMore } = actions.members;
   const count = total ?? chat?.members?.length ?? 0;
 
@@ -205,7 +208,9 @@ const GroupInfoPanel = ({ open, onClose, chatId, chat, currentUserId, onlineUser
                   navigate(`/settings/groups?group=${chatId}`);
                 }}
               />
+              <ActionRow icon={<LinkIcon />} label="Invite via link" onClick={() => setInviteOpen(true)} />
             </List>
+            <InviteLinkDialog open={inviteOpen} onClose={() => setInviteOpen(false)} chatId={chatId} />
           </>
         )}
 
