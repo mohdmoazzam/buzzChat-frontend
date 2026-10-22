@@ -128,6 +128,8 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   // How far each other member has read: { [userId]: { read, joined } } in ms, for the ticks
   const [receipts, setReceipts] = useState({});
   const readTimer = useRef(null);
+  // FIFO queue of temp IDs for optimistic messages, replaced when the server echoes them back
+  const pendingIds = useRef([]);
   // The unsent draft, put back after an edit
   const draftBeforeEdit = useRef("");
   // For socket listeners, which shouldn't re-subscribe on every edit
@@ -329,8 +331,30 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
       return;
     }
     const replyTo = replyingTo;
+
+    // Optimistic update: show the message instantly before the server round-trip
+    const tempId = `pending-${Date.now()}-${Math.random()}`;
+    pendingIds.current.push(tempId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        _pending: true,
+        content: text,
+        sender: user,
+        chat_id: chatId,
+        created_at: new Date().toISOString(),
+        reply_to: replyTo ?? null,
+        attachments: [],
+        reactions: [],
+      },
+    ]);
+
     socket.emit("NEW_MESSAGE", { chat_id: chatId, message: text, reply_to_id: replyTo?.id }, (ack) => {
       if (ack?.ok) return;
+      // Roll back the optimistic message on failure
+      pendingIds.current = pendingIds.current.filter((id) => id !== tempId);
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       toast.error(ack?.error || "Message not sent. Please try again.");
       // Put the text back so nothing typed is lost
       setMessage((current) => current || text);
@@ -451,8 +475,10 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   useEffect(() => {
     socket.emit("CHAT_JOINED");
     hasInitialScroll.current = false;
+    pendingIds.current = [];
 
     return () => {
+      pendingIds.current = [];
       setMessages([]);
       setMessage("");
       setOldMessages([]);
@@ -545,6 +571,14 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   const newMessagesListener = useCallback(
     (data) => {
       if (data.chat_id !== chatId) return;
+      if (data.message?.sender?.id === user.id) {
+        // Replace the oldest optimistic message (FIFO) with the confirmed one from the server
+        const tempId = pendingIds.current.shift();
+        if (tempId) {
+          setMessages((prev) => prev.map((m) => (m.id === tempId ? data.message : m)));
+          return;
+        }
+      }
       setMessages((prev) => [...prev, data.message]);
       // Seen as it arrives (sending my own already counts as read on the server)
       if (data.message?.sender?.id !== user.id) markRead();
