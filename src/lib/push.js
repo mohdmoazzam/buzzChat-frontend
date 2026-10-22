@@ -14,6 +14,7 @@ const readOwner = () => {
     return null;
   }
 };
+
 const writeOwner = (userId) => {
   try {
     if (userId) localStorage.setItem(OWNER_KEY, userId);
@@ -23,22 +24,31 @@ const writeOwner = (userId) => {
   }
 };
 
-export const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+export const pushSupported = () =>
+  "serviceWorker" in navigator &&
+  "PushManager" in window &&
+  "Notification" in window;
 
 // iPhone and iPad only allow push for web apps added to the home screen
 export const needsHomeScreen = () =>
-  /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.matchMedia("(display-mode: standalone)").matches;
+  /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+  !window.matchMedia("(display-mode: standalone)").matches;
 
 export const registerServiceWorker = () => {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker.register("/sw.js").catch(() => undefined);
 };
 
-const authed = (token) => ({ withCredentials: true, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+const authed = (token) => ({
+  withCredentials: true,
+  headers: token ? { Authorization: `Bearer ${token}` } : {},
+});
 
 // The VAPID key arrives as base64url; the browser wants raw bytes
 const keyBytes = (base64url) => {
-  const base64 = (base64url + "=".repeat((4 - (base64url.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const base64 = (base64url + "=".repeat((4 - (base64url.length % 4)) % 4))
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
 };
 
@@ -57,7 +67,11 @@ const browserSubscription = async () => {
 
 const save = (subscription, token) => {
   const { endpoint, keys } = subscription.toJSON();
-  return axios.post(`${server}/api/v1/push/subscription`, { endpoint, p256dh: keys.p256dh, auth: keys.auth }, authed(token));
+  return axios.post(
+    `${server}/api/v1/push/subscription`,
+    { endpoint, p256dh: keys.p256dh, auth: keys.auth },
+    authed(token),
+  );
 };
 
 // "Not now" on the turn-on prompt hides it for a while
@@ -66,7 +80,10 @@ const PROMPT_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const snoozePushPrompt = () => {
   try {
-    localStorage.setItem(PROMPT_SNOOZE_KEY, String(Date.now() + PROMPT_SNOOZE_MS));
+    localStorage.setItem(
+      PROMPT_SNOOZE_KEY,
+      String(Date.now() + PROMPT_SNOOZE_MS),
+    );
   } catch {
     // Storage blocked: the prompt comes back next visit
   }
@@ -85,17 +102,26 @@ const promptSnoozed = () => {
  * for this account yet, the server has push set up, and the user didn't just say "Not now".
  */
 export const shouldPromptForPush = async ({ token, userId }) => {
-  if (!pushSupported() || Notification.permission === "denied" || promptSnoozed()) return false;
+  if (
+    !pushSupported() ||
+    Notification.permission === "denied" ||
+    promptSnoozed()
+  )
+    return false;
   if (await isPushOn(userId)) return false;
   try {
-    const { data } = await axios.get(`${server}/api/v1/push/public-key`, authed(token));
+    const { data } = await axios.get(
+      `${server}/api/v1/push/public-key`,
+      authed(token),
+    );
     return !!data.public_key;
   } catch {
     return false;
   }
 };
 
-const messageOf = (error) => error?.response?.data?.message || error?.message || "Something went wrong";
+const messageOf = (error) =>
+  error?.response?.data?.message || error?.message || "Something went wrong";
 
 /** Whether push is on in this browser for this account. */
 export const isPushOn = async (userId) => {
@@ -107,8 +133,12 @@ export const isPushOn = async (userId) => {
 /** Asks for permission and subscribes this browser. Throws an Error with a message to show. */
 export const enablePush = async ({ token, userId }) => {
   try {
-    const { data } = await axios.get(`${server}/api/v1/push/public-key`, authed(token));
-    if (!data.public_key) throw new Error("Push notifications aren't available right now");
+    const { data } = await axios.get(
+      `${server}/api/v1/push/public-key`,
+      authed(token),
+    );
+    if (!data.public_key)
+      throw new Error("Push notifications aren't available right now");
 
     const permission = await Notification.requestPermission();
     if (permission !== "granted") {
@@ -127,7 +157,10 @@ export const enablePush = async ({ token, userId }) => {
       await subscription.unsubscribe();
       subscription = null;
     }
-    subscription ??= await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+    subscription ??= await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: key,
+    });
 
     await save(subscription, token);
     writeOwner(userId);
@@ -137,7 +170,9 @@ export const enablePush = async ({ token, userId }) => {
 };
 
 export const disablePush = async ({ token }) => {
-  await axios.delete(`${server}/api/v1/push/subscription`, authed(token)).catch(() => undefined);
+  await axios
+    .delete(`${server}/api/v1/push/subscription`, authed(token))
+    .catch(() => undefined);
   const subscription = await browserSubscription();
   await subscription?.unsubscribe().catch(() => undefined);
   writeOwner(null);
