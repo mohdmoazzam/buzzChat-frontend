@@ -721,11 +721,21 @@ const Chat =({ chatId, chat, isOnline, onlineUsers }) => {
   }, [hasExpiring]);
   const canSend = message.trim().length > 0;
 
+  const formatLastSeen = (t) => {
+    if (!t) return "Offline";
+    return "Last seen " + moment(t).calendar(null, {
+      sameDay:  "[today at] h:mm A",
+      lastDay:  "[yesterday at] h:mm A",
+      lastWeek: "ddd [at] h:mm A",
+      sameElse: "D MMM [at] h:mm A",
+    });
+  };
+
   const subtitle = userTyping
     ? isGroup ? typingLabel(typingNames) : "typing…"
     : isGroup
       ? `${(members?.length ?? 0)} members`
-      : isOnline ? "Online" : "Offline";
+      : isOnline ? "Online" : formatLastSeen(chat?.other_last_seen_at);
 
   // Decide grouping, sender labels and date separators
   const renderMessages = () =>
