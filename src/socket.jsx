@@ -22,9 +22,18 @@ const SocketProvider = ({ children }) => {
             auth: { token: token ? `Bearer ${token}` : "" },
         });
 
+        // Whether this tab is in front; the server only skips web push for tabs that are (APP_ACTIVE)
+        const reportActive = () => {
+            if (instance.connected) instance.emit("APP_ACTIVE", { active: document.visibilityState === "visible" && document.hasFocus() });
+        };
+        document.addEventListener("visibilitychange", reportActive);
+        window.addEventListener("focus", reportActive);
+        window.addEventListener("blur", reportActive);
+
         // After a dropped connection, refresh anything we may have missed
         let hasConnected = false;
         instance.on("connect", () => {
+            reportActive();
             if (hasConnected) dispatch(api.util.invalidateTags(["Chat", "Notifications"]));
             hasConnected = true;
         });
@@ -41,6 +50,9 @@ const SocketProvider = ({ children }) => {
 
         setSocket(instance);
         return () => {
+            document.removeEventListener("visibilitychange", reportActive);
+            window.removeEventListener("focus", reportActive);
+            window.removeEventListener("blur", reportActive);
             instance.removeAllListeners();
             instance.disconnect();
         };
