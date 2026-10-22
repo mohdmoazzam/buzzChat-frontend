@@ -4,6 +4,7 @@ import {
   DevicesOutlined as DevicesIcon,
   GroupsOutlined as GroupsIcon,
   LockOutlined as PasswordIcon,
+  NotificationsOutlined as NotificationsIcon,
   PersonOutline as PersonIcon,
 } from "@mui/icons-material";
 import { Box, IconButton, Stack, Tooltip, Typography } from "@mui/material";
@@ -14,6 +15,7 @@ export const SETTINGS_SECTIONS = [
   { label: "Edit profile", path: "/settings/profile", Icon: PersonIcon },
   { label: "Password", path: "/settings/password", Icon: PasswordIcon },
   { label: "Devices", path: "/settings/devices", Icon: DevicesIcon },
+  { label: "Notifications", path: "/settings/notifications", Icon: NotificationsIcon },
   { label: "Manage groups", path: "/settings/groups", Icon: GroupsIcon },
   { label: "Delete account", path: "/settings/delete-account", Icon: DeleteAccountIcon },
 ];

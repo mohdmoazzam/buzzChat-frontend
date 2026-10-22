@@ -7,6 +7,10 @@ import { Provider } from "react-redux"
 import store from './redux/store.js';
 import theme from './constants/theme.js';
 import "./index.css";
+import { registerServiceWorker } from './lib/push.js';
+
+// Receives web push notifications (public/sw.js)
+registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
