@@ -152,6 +152,16 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats", mobileHeader = 
       setOnlineUsers(data);
     }, []);
 
+    const userLastSeenListener = useCallback(({ user_id, last_seen_at } = {}) => {
+      if (!user_id) return;
+      dispatch(
+        api.util.updateQueryData("myChats", {}, (draft) => {
+          const chat = draft?.chats?.find((c) => !c.group_chat && c.members?.includes(user_id));
+          if (chat) chat.other_last_seen_at = last_seen_at;
+        })
+      );
+    }, [dispatch]);
+
     // Keep the chat list preview live: update the last message and move the chat to the top
     const chatPreviewListener = useCallback(({ chat_id: messageChatId, message } = {}) => {
       if (!messageChatId || !message) return;
@@ -194,6 +204,7 @@ const AppLayout = ({ showListOnMobile = true, sidebar = "chats", mobileHeader = 
       // Disappearing messages: a chat's latest message may be gone, so its preview needs refreshing
       MESSAGES_EXPIRED: reloadFirstPage,
       ONLINE_USERS: onlineUsersListener,
+      USER_LAST_SEEN: userLastSeenListener,
     };
 
     useSocketsEvents(socket, eventHandler);
